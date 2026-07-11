@@ -1,0 +1,112 @@
+# Mega Chamomile — Design & Architecture
+
+A multiplayer hide-and-seek "paint yourself to blend in" game, inspired by
+MECCHA CHAMELEON (Steam, 2026). You stay a humanoid — no prop morphing — and
+camouflage by painting your own body with colors sampled from the world.
+
+## Core loop
+
+1. **Lobby** — players join a hosted game, host picks seeker count, starts.
+2. **PAINT phase (90 s)** — Hiders spawn in the map with a pure-white body.
+   They sample colors from the world (eyedropper) and paint their own body,
+   pick a hiding spot, and settle into position. Seekers wait in a sealed pen
+   with a "blindfold" overlay so they can't scout.
+3. **SEEK phase (180 s)** — Seekers are released with shotguns (raycast shots,
+   cooldown + limited ammo). Hiders may still move and keep painting.
+   - Seeker shoots a hider → hider eliminated (becomes a spectator).
+   - All hiders eliminated → seekers win. Timer expires → surviving hiders win.
+4. **RESULTS (12 s)** — scoreboard, then everyone returns to the lobby.
+
+## Scoring (the signature mechanic)
+
+- **Hiders**: +1/s survival while alive during SEEK. **Bold bonus +3/s** while
+  alive AND inside a seeker's line of sight (within seeker view cone, raycast
+  unobstructed). Hiding in plain sight scores more than cowering behind a wall.
+- **Seekers**: +100 per elimination, +50 team bonus each if all hiders found.
+- Eliminated hiders keep their accumulated points; survivors get +75 bonus.
+
+## The paint mechanic (MVP implementation)
+
+- The body is a blocky humanoid assembled from **subdivided BoxMeshes**
+  (head, torso, 2 arms, 2 legs) with **vertex-color painting**:
+  - Materials use `vertex_color_use_as_albedo = true` (works in Compatibility).
+  - Painting = raycast from the third-person camera crosshair onto your own
+    body part, then color every vertex within brush radius of the hit point
+    *in that part's local space*. No UV math, no texture readback.
+  - Strokes replicate as tiny RPCs: `(part_index, local_pos, color, radius)`.
+    Late joiners are out of scope for MVP (lobby locks at match start).
+- **Eyedropper**: read the rendered frame's center pixel
+  (`viewport.get_texture().get_image().get_pixel(...)`) — samples anything on
+  screen regardless of material. On-demand only (click), so the readback cost
+  is fine.
+- Future upgrade path (documented, not built): per-part paint *textures* with
+  analytic box UVs for smooth strokes; palette mixing UI.
+
+## Multiplayer model
+
+- Godot high-level multiplayer, **ENet**, listen server (host = server+player).
+  Join by IP:port (LAN / port-forward for now; lobby service is future work).
+- `Net.gd` autoload: host/join, `players: {peer_id: {name, role, ...}}`
+  registry replicated via reliable RPCs, connection/disconnection signals.
+- `game.tscn` uses a **MultiplayerSpawner** (players spawn as `str(peer_id)`,
+  input authority = that peer) and **MultiplayerSynchronizer** for transforms.
+- **Server-authoritative rules**: phase machine, timers, role assignment,
+  eliminations, and scoring all run in `MatchState` on the server only;
+  clients receive phase changes / scores / eliminations via RPCs.
+- Shot validation on the server: seeker sends shot ray (origin, dir); server
+  raycasts and applies elimination.
+
+## Testable game logic (non-negotiable)
+
+`scripts/match_state.gd` is a plain `RefCounted` — **no scene tree, no
+networking, no rendering**. It holds phases, timers, roles, alive/eliminated,
+scores, and win conditions, advanced by `tick(delta)` and fed by plain calls
+(`add_player`, `start_match`, `report_shot_hit`, `set_in_sight`, ...). A whole
+match plays out in a headless unit test:
+`godot --headless -s tests/run_tests.gd` (custom micro-runner, no addon).
+
+## Scene / file layout
+
+```
+autoload/Game.gd        # scene transitions + app state (current match settings)
+autoload/Net.gd         # ENet host/join + player registry + signals
+scripts/match_state.gd  # PURE match rules (testable headless)
+scripts/player.gd       # CharacterBody3D: move, camera, paint, shoot
+scripts/paintable_body.gd # builds subdivided-box humanoid, vertex splat API
+scripts/game.gd         # wires Net + MatchState + spawner + HUD (thin shell)
+scenes/main_menu.tscn   # name, host, join
+scenes/lobby.tscn       # player list, seeker count, start
+scenes/game.tscn        # Map + Players + HUD + ResultsOverlay
+scenes/player.tscn
+maps/map_basic.tscn     # colored-zone blockout arena
+tests/run_tests.gd      # headless assert-based test suite for MatchState
+assets/                 # copied Kenney CC0 (UI, audio, font)
+docs/DESIGN.md, PROGRESS.md
+```
+
+## Controls
+
+- WASD move, Space jump, mouse orbit camera (captured), Esc release mouse.
+- Hider: **LMB paint**, **RMB (hold) eyedrop** world color at crosshair,
+  scroll = brush size. Palette bar shows current color.
+- Seeker: **LMB shoot** (cooldown 0.8 s, ammo = 3× hider count).
+
+## Config defaults (Game.gd)
+
+| Setting | Default |
+| --- | --- |
+| Port | 24565 |
+| Paint phase | 90 s |
+| Seek phase | 180 s |
+| Results | 12 s |
+| Seekers | 1 (host-configurable in lobby) |
+| Shot cooldown / ammo | 0.8 s / 3× hiders |
+
+## Deliberate MVP cuts (future work)
+
+- One map only (`map_basic`); more maps later (user said he'll make them).
+- No late-join mid-match, no host migration, no dedicated server build.
+- Vertex-paint resolution is chunky (by design, blocky aesthetic) — texture
+  painting is the quality upgrade later.
+- No poses/emotes yet; crouching in place stands in for "posing".
+- Lobby is IP-based; no matchmaking/party codes yet.
