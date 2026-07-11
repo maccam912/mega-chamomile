@@ -3,7 +3,31 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: MVP COMPLETE & VERIFIED (session 1, 2026-07-11)
+## Status: MVP + controls overhaul after first human playtest (session 2, 2026-07-11)
+
+### Session 2: playtest feedback fixes
+- **Fixed the WASD spin bug**: the body turns to face travel direction by
+  rotating the CharacterBody root, but the camera rig is a child of that root
+  → rotating the root dragged the camera → feedback loop → constant spinning.
+  Fix: counter-rotate `_rig.rotation.y` by the same yaw delta so the camera's
+  world yaw holds still while the body turns (player.gd `_local_move`).
+- **F toggles paint mode** (hiders only): cursor released, LMB click/drag
+  directly on your body to paint (ray from cursor, not crosshair), RMB
+  eyedrops the pixel under the cursor, MMB-drag orbits the camera, wheel
+  resizes brush. Auto-exits when painting becomes illegal (eliminated/results).
+  Crosshair-paint while captured still works too.
+- **Esc is now a pause menu** (scripts/pause_menu.gd): Resume / Leave Match /
+  Quit. Match keeps running (multiplayer). While open, the local player's
+  input is blocked (`ui_blocked`). Replaced the old raw mouse-capture toggle.
+- **Everything is InputMap actions** (app.gd `_setup_input_map`): `pause`
+  (Esc), `toggle_paint_mode` (F), `brush_grow`/`brush_shrink` (wheel), plus
+  the existing move/jump/crouch/primary_action/eyedrop — rebindable later.
+- **HUD**: brush-size preview circle next to the swatch, "PAINT MODE" banner
+  under the timer, crosshair hides in paint mode, hints rewritten.
+- Verified: 38 headless checks pass, headless solo E2E full loop clean,
+  windowed screenshot shows new HUD. Paint-mode feel NOT yet human-tested.
+
+## Session 1 status: MVP COMPLETE & VERIFIED (2026-07-11)
 
 The full game loop exists and runs: menu → host/join lobby → paint phase →
 seek phase → results → back to lobby, multiplayer over ENet, with the
@@ -24,8 +48,7 @@ eliminations, spectator mode, sounds, and HUD.
   Lighting tuned so ambient+sun ≈ 1.0 (was overbright, washed out floor).
 
 ### NOT yet verified (first things to playtest)
-- Actual mouse-driven painting/eyedropping in a live window (splat math is
-  unit-tested, raycast→splat wiring is not human-tested).
+- Paint-mode feel (F → cursor painting) after the session-2 overhaul.
 - Shooting a real painted hider across two windows; tracer visuals.
 - Feel/tuning: mouse sens, camera distance, brush size, LoS cone width.
 
@@ -38,7 +61,8 @@ eliminations, spectator mode, sounds, and HUD.
 - `scripts/game_scene.gd` — server: MatchState+LoS+shots; all: spawn/FX/HUD
 - `scripts/player.gd` — move/camera/paint/eyedrop/shoot/sync/spectator
 - `scripts/paintable_body.gd` — subdivided-box humanoid, vertex splats
-- `scripts/hud.gd`, `scripts/main_menu.gd`, `scripts/lobby.gd`
+- `scripts/hud.gd`, `scripts/main_menu.gd`, `scripts/lobby.gd`,
+  `scripts/pause_menu.gd` (Esc overlay; match keeps running)
 - `maps/map_basic.gd` — data-driven ZONES array; maps must expose
   `hider_spawns()/seeker_spawns()/set_seek_open(bool)`
 - `tests/run_tests.gd` — headless suite

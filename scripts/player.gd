@@ -23,6 +23,8 @@ var brush_radius := 0.09
 var ammo := 0
 var shot_cooldown_left := 0.0
 var frozen := true  ## nobody moves until the first phase broadcast
+var paint_mode := false  ## F: cursor visible, click your body to paint
+var ui_blocked := false  ## pause menu open: swallow all gameplay input
 
 var body: PaintableBody
 var _rig: Node3D
@@ -117,7 +119,7 @@ func _ready() -> void:
 		_snd_eyedrop = AudioStreamPlayer.new()
 		_snd_eyedrop.stream = load("res://assets/audio/eyedrop.ogg")
 		add_child(_snd_eyedrop)
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_update_mouse_mode()
 
 
 func _add_gun() -> void:
@@ -163,23 +165,51 @@ func on_eliminated() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_local():
+	if not is_local() or ui_blocked:
 		return
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_rig.rotation.y -= event.relative.x * MOUSE_SENS
-		_rig.rotation.x = clampf(_rig.rotation.x - event.relative.y * MOUSE_SENS, -1.2, 1.2)
-	elif event.is_action_pressed("toggle_mouse"):
-		Input.mouse_mode = (
-			Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			else Input.MOUSE_MODE_CAPTURED
-		)
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			brush_radius = minf(brush_radius + 0.02, 0.25)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			brush_radius = maxf(brush_radius - 0.02, 0.05)
-	if event.is_action_pressed("eyedrop") and _can_paint():
+	if event is InputEventMouseMotion:
+		# Free look while captured; in paint mode, orbit only while MMB is held
+		# so the cursor can travel to the body without the camera chasing it.
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			_orbit(event.relative)
+		elif paint_mode and Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+			_orbit(event.relative)
+	elif event.is_action_pressed("toggle_paint_mode"):
+		if paint_mode:
+			set_paint_mode(false)
+		elif _can_paint():
+			set_paint_mode(true)
+	elif event.is_action_pressed("brush_grow"):
+		brush_radius = minf(brush_radius + 0.02, 0.25)
+	elif event.is_action_pressed("brush_shrink"):
+		brush_radius = maxf(brush_radius - 0.02, 0.05)
+	elif event.is_action_pressed("eyedrop") and _can_paint():
 		_eyedrop()
+
+
+func _orbit(relative: Vector2) -> void:
+	_rig.rotation.y -= relative.x * MOUSE_SENS
+	_rig.rotation.x = clampf(_rig.rotation.x - relative.y * MOUSE_SENS, -1.2, 1.2)
+
+
+func set_paint_mode(on: bool) -> void:
+	if paint_mode == on:
+		return
+	paint_mode = on
+	_update_mouse_mode()
+
+
+func set_ui_blocked(blocked: bool) -> void:
+	ui_blocked = blocked
+	if is_local():
+		_update_mouse_mode()
+
+
+func _update_mouse_mode() -> void:
+	Input.mouse_mode = (
+		Input.MOUSE_MODE_VISIBLE if ui_blocked or paint_mode
+		else Input.MOUSE_MODE_CAPTURED
+	)
 
 
 func _physics_process(delta: float) -> void:
@@ -204,22 +234,36 @@ func _process(delta: float) -> void:
 	shot_cooldown_left = maxf(0.0, shot_cooldown_left - delta)
 	_paint_timer += delta
 	_paint_sound_timer = maxf(0.0, _paint_sound_timer - delta)
-	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	if paint_mode and not _can_paint():
+		set_paint_mode(false)  # eliminated or phase ended mid-painting
+	if ui_blocked:
 		return
-	if Input.is_action_pressed("primary_action"):
-		if _can_paint() and _paint_timer >= PAINT_INTERVAL:
+	if paint_mode:
+		if (Input.is_action_pressed("primary_action")
+				and _paint_timer >= PAINT_INTERVAL):
 			_paint_timer = 0.0
-			_try_paint()
-		elif _can_shoot() and Input.is_action_just_pressed("primary_action"):
-			_try_shoot()
+			_try_paint(get_viewport().get_mouse_position())
+	elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if Input.is_action_pressed("primary_action"):
+			if _can_paint() and _paint_timer >= PAINT_INTERVAL:
+				_paint_timer = 0.0
+				_try_paint(get_viewport().get_visible_rect().size / 2.0)
+			elif _can_shoot() and Input.is_action_just_pressed("primary_action"):
+				_try_shoot()
 
 
 func _local_move(delta: float) -> void:
 	if eliminated:
-		_fly_move(delta)
+		if not ui_blocked:
+			_fly_move(delta)
 		return
-	if frozen:
-		velocity = Vector3.ZERO
+	if frozen or ui_blocked:
+		# No input, but keep gravity so opening the menu mid-jump can't hover.
+		velocity.x = move_toward(velocity.x, 0, SPEED)
+		velocity.z = move_toward(velocity.z, 0, SPEED)
+		if not is_on_floor():
+			velocity.y -= _gravity * delta
+		move_and_slide()
 		return
 	var crouching := Input.is_action_pressed("crouch")
 	body.scale.y = move_toward(body.scale.y, 0.62 if crouching else 1.0, 3.0 * delta)
@@ -236,9 +280,12 @@ func _local_move(delta: float) -> void:
 	if dir != Vector3.ZERO:
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
-		# The body turns to face travel direction; the camera orbits freely,
-		# so you can stand still and spin around yourself to paint every side.
-		rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z) + PI, minf(1.0, 10.0 * delta))
+		# The body turns to face travel direction. The camera rig is a child of
+		# this rotating root, so counter-rotate it by the same delta — otherwise
+		# the view spins with the body and feeds back into the move direction.
+		var new_yaw := lerp_angle(rotation.y, atan2(-dir.x, -dir.z) + PI, minf(1.0, 10.0 * delta))
+		_rig.rotation.y -= wrapf(new_yaw - rotation.y, -PI, PI)
+		rotation.y = new_yaw
 	else:
 		velocity.x = move_toward(velocity.x, 0, SPEED)
 		velocity.z = move_toward(velocity.z, 0, SPEED)
@@ -297,10 +344,11 @@ func _can_shoot() -> bool:
 	)
 
 
-## Raycast the crosshair against paintable parts (layer 2 only — walls don't
-## block painting your own body) and splat if we hit ourselves.
-func _try_paint() -> void:
-	var hit := _crosshair_ray(PAINT_RANGE, PaintableBody.PAINT_LAYER, [])
+## Raycast a screen point (crosshair or cursor) against paintable parts
+## (layer 2 only — walls don't block painting your own body) and splat if we
+## hit ourselves.
+func _try_paint(screen_point: Vector2) -> void:
+	var hit := _screen_ray(screen_point, PAINT_RANGE, PaintableBody.PAINT_LAYER, [])
 	if hit.is_empty():
 		return
 	var collider: Object = hit["collider"]
@@ -328,14 +376,18 @@ func apply_splat(part_idx: int, local_pos: Vector3, color: Color, radius: float)
 		_snd_paint.play()
 
 
-## Sample the actual rendered pixel at the crosshair — matches whatever you
-## see, lighting included.
+## Sample the actual rendered pixel at the crosshair (or under the cursor in
+## paint mode) — matches whatever you see, lighting included.
 func _eyedrop() -> void:
 	var vp := get_viewport()
 	var img := vp.get_texture().get_image()
 	if img == null:
 		return
-	var c := img.get_pixel(img.get_width() / 2, img.get_height() / 2)
+	var pt := vp.get_mouse_position() if paint_mode else vp.get_visible_rect().size / 2.0
+	var uv := pt / vp.get_visible_rect().size
+	var c := img.get_pixel(
+			clampi(int(uv.x * img.get_width()), 0, img.get_width() - 1),
+			clampi(int(uv.y * img.get_height()), 0, img.get_height() - 1))
 	c.a = 1.0
 	current_color = c
 	_snd_eyedrop.play()
@@ -351,10 +403,9 @@ func _try_shoot() -> void:
 	Net.request_shot(origin, dir)
 
 
-func _crosshair_ray(range_m: float, mask: int, exclude: Array) -> Dictionary:
-	var vp_center := get_viewport().get_visible_rect().size / 2.0
-	var origin := _camera.project_ray_origin(vp_center)
-	var dir := _camera.project_ray_normal(vp_center)
+func _screen_ray(screen_point: Vector2, range_m: float, mask: int, exclude: Array) -> Dictionary:
+	var origin := _camera.project_ray_origin(screen_point)
+	var dir := _camera.project_ray_normal(screen_point)
 	var params := PhysicsRayQueryParameters3D.create(
 			origin, origin + dir * range_m, mask, exclude)
 	return get_world_3d().direct_space_state.intersect_ray(params)

@@ -13,6 +13,7 @@ var match_state: MatchState  # server only
 var map: Node3D
 var players_node: Node3D
 var hud: CanvasLayer
+var pause_menu: CanvasLayer
 var my_role: int = MatchState.Role.NONE
 var current_phase: int = MatchState.Phase.LOBBY
 var total_hiders := 0
@@ -34,6 +35,10 @@ func _ready() -> void:
 	add_child(players_node)
 	hud = preload("res://scripts/hud.gd").new()
 	add_child(hud)
+	pause_menu = preload("res://scripts/pause_menu.gd").new()
+	add_child(pause_menu)
+	pause_menu.opened.connect(_set_ui_blocked.bind(true))
+	pause_menu.resumed.connect(_set_ui_blocked.bind(false))
 
 	_snd_shoot = load("res://assets/audio/shoot.ogg")
 	_snd_elim = load("res://assets/audio/eliminated.ogg")
@@ -284,10 +289,17 @@ func _on_player_despawned(peer_id: int) -> void:
 
 
 func _process(_delta: float) -> void:
-	# Keep the hider's palette swatch in sync with their picked color.
+	# Keep the hider's palette swatch and paint-mode state in sync.
 	var me := _player(multiplayer.get_unique_id())
 	if me != null and my_role == MatchState.Role.HIDER:
 		hud.set_swatch(me.current_color, me.brush_radius)
+		hud.set_paint_mode(me.paint_mode)
+
+
+func _set_ui_blocked(blocked: bool) -> void:
+	var me := _player(multiplayer.get_unique_id())
+	if me != null:
+		me.set_ui_blocked(blocked)
 
 
 # --- helpers -------------------------------------------------------------------

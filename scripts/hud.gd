@@ -2,11 +2,15 @@ extends CanvasLayer
 ## In-match HUD, built in code. The game scene drives it via plain method
 ## calls; it keeps its own display countdown between phase broadcasts.
 
+const MOVE_HINT := "F paint mode    wheel brush size"
+const PAINT_HINT := "LMB paint yourself    RMB sample color    MMB drag orbit    F done"
+
 var _phase_label: Label
 var _timer_label: Label
 var _role_label: Label
 var _alive_label: Label
 var _swatch: ColorRect
+var _brush_preview: Control
 var _brush_label: Label
 var _ammo_label: Label
 var _spotted_label: Label
@@ -16,10 +20,15 @@ var _blindfold_timer: Label
 var _results: Control
 var _bottom_hider: HBoxContainer
 var _hint_label: Label
+var _cross: ColorRect
+var _paint_mode_label: Label
 
 var _time_left := 0.0
 var _counting := false
 var _spot_pulse := 0.0
+var _paint_mode := false
+var _brush_radius := 0.09
+var _brush_color := Color.WHITE
 
 
 func _ready() -> void:
@@ -73,6 +82,13 @@ func _ready() -> void:
 	_spotted_label.add_theme_color_override("font_color", Color("ff5a4d"))
 	_spotted_label.visible = false
 	top.add_child(_spotted_label)
+	_paint_mode_label = Label.new()
+	_paint_mode_label.text = "PAINT MODE"
+	_paint_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_paint_mode_label.add_theme_font_size_override("font_size", 18)
+	_paint_mode_label.add_theme_color_override("font_color", Color("8fd18a"))
+	_paint_mode_label.visible = false
+	top.add_child(_paint_mode_label)
 
 	# Role card, top-left.
 	_role_label = Label.new()
@@ -92,13 +108,13 @@ func _ready() -> void:
 	_alive_label.add_theme_font_size_override("font_size", 20)
 	root.add_child(_alive_label)
 
-	# Crosshair.
-	var cross := ColorRect.new()
-	cross.color = Color(1, 1, 1, 0.85)
-	cross.set_anchors_preset(Control.PRESET_CENTER)
-	cross.size = Vector2(5, 5)
-	cross.position = Vector2(-2.5, -2.5)
-	root.add_child(cross)
+	# Crosshair (hidden in paint mode, where the OS cursor takes over).
+	_cross = ColorRect.new()
+	_cross.color = Color(1, 1, 1, 0.85)
+	_cross.set_anchors_preset(Control.PRESET_CENTER)
+	_cross.size = Vector2(5, 5)
+	_cross.position = Vector2(-2.5, -2.5)
+	root.add_child(_cross)
 
 	# Bottom-center: hider palette info.
 	_bottom_hider = HBoxContainer.new()
@@ -118,9 +134,16 @@ func _ready() -> void:
 	_swatch.custom_minimum_size = Vector2(40, 40)
 	_swatch.color = Color.WHITE
 	sw_frame.add_child(_swatch)
+	var br_frame := PanelContainer.new()
+	br_frame.add_theme_stylebox_override("panel", sw_style)
+	_bottom_hider.add_child(br_frame)
+	_brush_preview = Control.new()
+	_brush_preview.custom_minimum_size = Vector2(40, 40)
+	_brush_preview.draw.connect(_draw_brush_preview)
+	br_frame.add_child(_brush_preview)
 	_brush_label = Label.new()
 	_brush_label.add_theme_font_size_override("font_size", 14)
-	_brush_label.text = "LMB paint   RMB sample color   wheel brush size"
+	_brush_label.text = MOVE_HINT
 	_bottom_hider.add_child(_brush_label)
 
 	# Bottom-center: seeker ammo.
@@ -166,11 +189,11 @@ func setup(role: int) -> void:
 	if role == MatchState.Role.SEEKER:
 		_role_label.text = "SEEKER"
 		_role_label.add_theme_color_override("font_color", Color("ff8a5c"))
-		_hint_label.text = "find the painted hiders. LMB to shoot."
+		_hint_label.text = "find the painted hiders. LMB to shoot. Esc menu."
 	else:
 		_role_label.text = "HIDER"
 		_role_label.add_theme_color_override("font_color", Color("8fd18a"))
-		_hint_label.text = "paint yourself to match the world. C to crouch."
+		_hint_label.text = "press F, then paint yourself to match the world.\nC crouch, Esc menu."
 
 
 func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void:
@@ -195,6 +218,27 @@ func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void
 
 func set_swatch(color: Color, brush: float) -> void:
 	_swatch.color = color
+	if brush != _brush_radius or color != _brush_color:
+		_brush_radius = brush
+		_brush_color = color
+		_brush_preview.queue_redraw()
+
+
+func set_paint_mode(on: bool) -> void:
+	if on == _paint_mode:
+		return
+	_paint_mode = on
+	_cross.visible = not on
+	_paint_mode_label.visible = on
+	_brush_label.text = PAINT_HINT if on else MOVE_HINT
+
+
+func _draw_brush_preview() -> void:
+	var center := _brush_preview.size / 2.0
+	# brush_radius spans 0.05..0.25 m (see player.gd); map onto the 40px box.
+	var px := remap(_brush_radius, 0.05, 0.25, 4.0, 19.0)
+	_brush_preview.draw_circle(center, px, _brush_color)
+	_brush_preview.draw_arc(center, px, 0.0, TAU, 32, Color(1, 1, 1, 0.8), 1.5)
 
 
 func set_ammo(n: int) -> void:

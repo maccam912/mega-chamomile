@@ -95,9 +95,12 @@ func _setup_input_map() -> void:
 	_add_key("move_right", KEY_D)
 	_add_key("jump", KEY_SPACE)
 	_add_key("crouch", KEY_C)
-	_add_key("toggle_mouse", KEY_ESCAPE)
+	_add_key("pause", KEY_ESCAPE)
+	_add_key("toggle_paint_mode", KEY_F)
 	_add_mouse("primary_action", MOUSE_BUTTON_LEFT)   # paint (hider) / shoot (seeker)
 	_add_mouse("eyedrop", MOUSE_BUTTON_RIGHT)
+	_add_mouse("brush_grow", MOUSE_BUTTON_WHEEL_UP)
+	_add_mouse("brush_shrink", MOUSE_BUTTON_WHEEL_DOWN)
 
 
 func _add_key(action: String, keycode: Key) -> void:
