@@ -18,8 +18,8 @@ env:
   GODOT_TEMPLATE_VERSION: 4.7.stable
 
 jobs:
-  build-and-release:
-    name: Build and release desktop packages
+  build:
+    name: Build desktop packages
     runs-on: ubuntu-latest
 
     steps:
@@ -86,6 +86,49 @@ jobs:
           path: packages/*.zip
           if-no-files-found: error
 
+  verify-macos:
+    name: Verify macOS package
+    needs: build
+    runs-on: macos-latest
+
+    steps:
+      - name: Download packaged builds
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-builds-${{ github.run_number }}-${{ github.run_attempt }}
+          path: packages
+
+      - name: Verify signature, architectures, and launch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verify
+          ditto -x -k packages/mega-chamomile-macos-universal.zip verify
+
+          app="verify/Mega Chamomile.app"
+          executable="$app/Contents/MacOS/Mega Chamomile"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          architectures="$(lipo -archs "$executable")"
+          [[ "$architectures" == *x86_64* ]]
+          [[ "$architectures" == *arm64* ]]
+
+          "$executable" --headless --quit-after 1
+
+  release:
+    name: Create GitHub Release
+    needs:
+      - build
+      - verify-macos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download packaged builds
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-builds-${{ github.run_number }}-${{ github.run_attempt }}
+          path: packages
+
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -94,9 +137,18 @@ jobs:
           set -euo pipefail
           tag="build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           short_sha="${GITHUB_SHA::7}"
+          notes="Automated desktop builds from commit ${GITHUB_SHA}.
+
+          macOS installation:
+          1. Extract the ZIP and move Mega Chamomile.app to Applications.
+          2. Control-click Mega Chamomile.app and choose Open.
+          3. Click Open in the confirmation dialog.
+          4. If Open is not offered, use System Settings > Privacy & Security > Open Anyway.
+
+          The macOS build is universal and ad-hoc signed, but is not notarized because this project does not use a paid Apple Developer account. The Windows build is unsigned."
 
           gh release create "$tag" packages/*.zip \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Mega Chamomile build ${GITHUB_RUN_NUMBER} (${short_sha})" \
-            --notes "Automated desktop builds from commit ${GITHUB_SHA}. The macOS build is universal and supports both Intel and Apple Silicon. Builds are unsigned."
+            --notes "$notes"
