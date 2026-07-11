@@ -9,7 +9,8 @@ const JUMP_VELOCITY := 4.6
 const FLY_SPEED := 8.0
 const MOUSE_SENS := 0.0025
 const SYNC_INTERVAL := 0.05
-const PAINT_INTERVAL := 0.06
+const PAINT_MIN_STEP := 0.35  ## of brush radius: cursor travel before restamping
+const PAINT_MAX_GAP := 0.35   ## m: bigger jumps between samples aren't connected
 const PAINT_RANGE := 4.0
 const SHOOT_RANGE := 60.0
 
@@ -25,6 +26,7 @@ var shot_cooldown_left := 0.0
 var frozen := true  ## nobody moves until the first phase broadcast
 var paint_mode := false  ## F: cursor visible, click your body to paint
 var ui_blocked := false  ## pause menu open: swallow all gameplay input
+var respawn_position := Vector3.ZERO  ## assigned match spawn; fall recovery target
 
 var body: PaintableBody
 var _rig: Node3D
@@ -34,7 +36,8 @@ var _nameplate: Label3D
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 var _sync_timer := 0.0
-var _paint_timer := 0.0
+var _stroke_active := false  ## LMB held and last sample hit our body
+var _stroke_last := Vector3.ZERO  ## body-space point of the last stamp
 var _paint_sound_timer := 0.0
 var _footstep_timer := 0.0
 var _target_pos := Vector3.ZERO
@@ -205,6 +208,12 @@ func set_ui_blocked(blocked: bool) -> void:
 		_update_mouse_mode()
 
 
+func recover_from_fall() -> void:
+	position = respawn_position
+	velocity = Vector3.ZERO
+	_target_pos = respawn_position
+
+
 func _update_mouse_mode() -> void:
 	Input.mouse_mode = (
 		Input.MOUSE_MODE_VISIBLE if ui_blocked or paint_mode
@@ -232,22 +241,20 @@ func _process(delta: float) -> void:
 	if not is_local():
 		return
 	shot_cooldown_left = maxf(0.0, shot_cooldown_left - delta)
-	_paint_timer += delta
 	_paint_sound_timer = maxf(0.0, _paint_sound_timer - delta)
 	if paint_mode and not _can_paint():
 		set_paint_mode(false)  # eliminated or phase ended mid-painting
+	if ui_blocked or not Input.is_action_pressed("primary_action"):
+		_stroke_active = false  # stroke ends when LMB lifts or the menu opens
 	if ui_blocked:
 		return
 	if paint_mode:
-		if (Input.is_action_pressed("primary_action")
-				and _paint_timer >= PAINT_INTERVAL):
-			_paint_timer = 0.0
-			_try_paint(get_viewport().get_mouse_position())
+		if Input.is_action_pressed("primary_action"):
+			_paint_sample(get_viewport().get_mouse_position())
 	elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if Input.is_action_pressed("primary_action"):
-			if _can_paint() and _paint_timer >= PAINT_INTERVAL:
-				_paint_timer = 0.0
-				_try_paint(get_viewport().get_visible_rect().size / 2.0)
+			if _can_paint():
+				_paint_sample(get_viewport().get_visible_rect().size / 2.0)
 			elif _can_shoot() and Input.is_action_just_pressed("primary_action"):
 				_try_shoot()
 
@@ -344,19 +351,45 @@ func _can_shoot() -> bool:
 	)
 
 
-## Raycast a screen point (crosshair or cursor) against paintable parts
-## (layer 2 only — walls don't block painting your own body) and splat if we
-## hit ourselves.
-func _try_paint(screen_point: Vector2) -> void:
+## Sample the brush under a screen point (cursor or crosshair) every frame
+## while LMB is held. Consecutive hits are joined into a stroke: stamps fill
+## the segment between them, so fast drags paint lines instead of dots.
+func _paint_sample(screen_point: Vector2) -> void:
 	var hit := _screen_ray(screen_point, PAINT_RANGE, PaintableBody.PAINT_LAYER, [])
 	if hit.is_empty():
+		_stroke_active = false
 		return
 	var collider: Object = hit["collider"]
 	if not collider.has_meta("peer_id") or int(collider.get_meta("peer_id")) != peer_id:
+		_stroke_active = false
 		return  # you can only paint yourself
-	var part_idx: int = collider.get_meta("part_idx")
 	var local_pos: Vector3 = body.global_transform.affine_inverse() * Vector3(hit["position"])
-	rpc(&"apply_splat", part_idx, local_pos, current_color, brush_radius)
+	if not _stroke_active:
+		_stroke_active = true
+		_stroke_last = local_pos
+		rpc(&"apply_stroke", local_pos, local_pos, current_color, brush_radius)
+		return
+	var gap := _stroke_last.distance_to(local_pos)
+	if gap < brush_radius * PAINT_MIN_STEP:
+		return  # holding still: nothing new to paint, no RPC spam
+	# Big jumps (cursor flicked across the body, or skimmed off an edge and
+	# back on) get a fresh stamp, not a line drawn through the torso.
+	var from := _stroke_last if gap <= PAINT_MAX_GAP else local_pos
+	rpc(&"apply_stroke", from, local_pos, current_color, brush_radius)
+	_stroke_last = local_pos
+
+
+## On-screen pixel radius of the brush at the cursor: measured against the
+## surface under the cursor, or the body's center mass when off-body.
+func brush_cursor_px(screen_point: Vector2) -> float:
+	var hit := _screen_ray(screen_point, PAINT_RANGE, PaintableBody.PAINT_LAYER, [])
+	var ref: Vector3 = (
+		Vector3(hit["position"]) if not hit.is_empty()
+		else body.global_transform * Vector3(0, 1.0, 0)
+	)
+	var right: Vector3 = _camera.global_transform.basis.x
+	return _camera.unproject_position(ref).distance_to(
+			_camera.unproject_position(ref + right * brush_radius))
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -368,8 +401,8 @@ func sync_state(pos: Vector3, yaw: float, look: Vector3, crouching: bool) -> voi
 
 
 @rpc("authority", "call_local", "reliable")
-func apply_splat(part_idx: int, local_pos: Vector3, color: Color, radius: float) -> void:
-	body.splat(part_idx, local_pos, color, radius)
+func apply_stroke(from_pos: Vector3, to_pos: Vector3, color: Color, radius: float) -> void:
+	body.stroke(from_pos, to_pos, color, radius)
 	if _paint_sound_timer <= 0.0:
 		_paint_sound_timer = 0.15
 		_snd_paint.pitch_scale = randf_range(0.9, 1.15)

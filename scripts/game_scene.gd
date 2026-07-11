@@ -8,6 +8,8 @@ const MAP_SCENE := preload("res://maps/map_basic.tscn")
 const LOS_INTERVAL := 0.25
 const LOS_MAX_DIST := 40.0
 const LOS_HALF_ANGLE_DEG := 38.0
+const FALL_RECOVERY_Y := -20.0
+const FALL_RECOVERY_WIDTH := 2048.0
 
 var match_state: MatchState  # server only
 var map: Node3D
@@ -30,6 +32,7 @@ var _snd_lose: AudioStream
 func _ready() -> void:
 	map = MAP_SCENE.instantiate()
 	add_child(map)
+	_build_fall_recovery()
 	players_node = Node3D.new()
 	players_node.name = "Players"
 	add_child(players_node)
@@ -226,8 +229,32 @@ func _spawn_player(info: Dictionary) -> void:
 	p.name = str(int(info["id"]))
 	p.display_name = str(info["name"])
 	p.role = int(info["role"])
-	players_node.add_child(p)
 	p.position = info["pos"]
+	p.respawn_position = info["pos"]
+	players_node.add_child(p)
+
+
+## Hidden catch volume far below the map. Each peer simulates only its own
+## player recovery; the normal transform RPC then updates everybody else.
+func _build_fall_recovery() -> void:
+	var recovery := Area3D.new()
+	recovery.name = "FallRecovery"
+	recovery.position.y = FALL_RECOVERY_Y
+	recovery.collision_layer = 0
+	recovery.collision_mask = 4  # player CharacterBody3D layer
+	recovery.body_entered.connect(_on_fall_recovery_body_entered)
+	add_child(recovery)
+
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(FALL_RECOVERY_WIDTH, 4.0, FALL_RECOVERY_WIDTH)
+	col.shape = shape
+	recovery.add_child(col)
+
+
+func _on_fall_recovery_body_entered(fallen: Node3D) -> void:
+	if fallen.has_method("is_local") and fallen.is_local():
+		fallen.recover_from_fall()
 
 
 func _on_phase_changed(phase: int, duration: float, extra: Dictionary) -> void:
@@ -289,11 +316,14 @@ func _on_player_despawned(peer_id: int) -> void:
 
 
 func _process(_delta: float) -> void:
-	# Keep the hider's palette swatch and paint-mode state in sync.
+	# Keep the hider's palette swatch, paint-mode state, and brush ring in sync.
 	var me := _player(multiplayer.get_unique_id())
 	if me != null and my_role == MatchState.Role.HIDER:
 		hud.set_swatch(me.current_color, me.brush_radius)
 		hud.set_paint_mode(me.paint_mode)
+		if me.paint_mode:
+			var mp: Vector2 = get_viewport().get_mouse_position()
+			hud.set_brush_cursor(mp, me.brush_cursor_px(mp), me.current_color)
 
 
 func _set_ui_blocked(blocked: bool) -> void:

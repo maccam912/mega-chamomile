@@ -3,7 +3,35 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: MVP + controls overhaul after first human playtest (session 2, 2026-07-11)
+## Status: paint feel + camera orbit fixes after second playtest (session 3, 2026-07-11)
+
+### Session 3: paint strokes, brush ring, orbit regression
+- **Camera orbit while captured was dead** (playtest: "mouse captured but view
+  doesn't change"). Root cause: the HUD crosshair ColorRect sits at dead
+  center — exactly where every captured-mouse motion event lands — and
+  Controls default to MOUSE_FILTER_STOP, so the GUI consumed the motion before
+  player `_unhandled_input`. In session 1 the WASD spin bug masked this. Fix:
+  `_pass_mouse_through()` recursively sets MOUSE_FILTER_IGNORE on every HUD
+  control (hud.gd), incl. the late-built results overlay. Regression test
+  walks the HUD and asserts no STOP controls.
+- **Painting was dotted, not continuous** ("bloop bloop bloop, ~4 dots/sec"):
+  16Hz sampling + no interpolation left gaps on fast drags. Now the brush
+  samples every frame and consecutive hits become a *stroke*: an RPC carries
+  (from, to, color, radius) and every peer stamps along the segment at
+  radius/2 spacing (paintable_body.gd `stroke()`). Holding still sends
+  nothing (min-step dedupe); jumps > 0.35m aren't connected (no lines drawn
+  through the torso when the cursor skims off an edge). Stamps now paint all
+  parts they touch, so strokes don't seam at part boundaries. Old
+  `splat(part_idx, ...)` / `apply_splat` RPC replaced by
+  `splat_at`/`stroke`/`apply_stroke`.
+- **Brush ring at the cursor** in paint mode: hud.gd draws a color ring w/
+  dark halo at the cursor, sized to the brush's true projected on-screen
+  radius (player.gd `brush_cursor_px()` unprojects radius at hit distance).
+  Its center stays transparent so RMB samples the rendered surface beneath it,
+  not the brush color itself. The little 40px preview next to the swatch remains.
+- **Under-map fall recovery**: a hidden catch volume below the arena returns
+  the local player to their assigned match spawn and clears their velocity.
+  Normal transform sync propagates the recovery to the other peers.
 
 ### Session 2: playtest feedback fixes
 - **Fixed the WASD spin bug**: the body turns to face travel direction by

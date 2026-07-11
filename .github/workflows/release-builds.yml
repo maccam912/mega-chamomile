@@ -1,0 +1,102 @@
+name: Build and release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: 4.7-stable
+  GODOT_TEMPLATE_VERSION: 4.7.stable
+
+jobs:
+  build-and-release:
+    name: Build and release desktop packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Godot and export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_url="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          curl --fail --location --retry 3 \
+            --output /tmp/godot.zip \
+            "${base_url}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl --fail --location --retry 3 \
+            --output /tmp/export_templates.tpz \
+            "${base_url}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+
+          mkdir -p "$HOME/.local/bin" /tmp/godot-templates
+          unzip -q /tmp/godot.zip -d "$HOME/.local/bin"
+          godot_binary="$HOME/.local/bin/Godot_v${GODOT_VERSION}_linux.x86_64"
+          chmod +x "$godot_binary"
+          ln -s "$godot_binary" "$HOME/.local/bin/godot"
+
+          unzip -q /tmp/export_templates.tpz -d /tmp/godot-templates
+          template_dir="$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+          mkdir -p "$template_dir"
+          mv /tmp/godot-templates/templates/* "$template_dir/"
+
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Import project resources
+        run: godot --headless --path . --import
+
+      - name: Export Linux x86_64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/linux packages
+          godot --headless --path . --export-release Linux build/linux/mega-chamomile.x86_64
+          (cd build/linux && zip -9 -r ../../packages/mega-chamomile-linux-x86_64.zip .)
+
+      - name: Export Windows x86_64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/windows
+          godot --headless --path . --export-release 'Windows Desktop' build/windows/mega-chamomile.exe
+          (cd build/windows && zip -9 -r ../../packages/mega-chamomile-windows-x86_64.zip .)
+
+      - name: Export macOS Universal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/macos
+          godot --headless --path . --export-release macOS build/macos/mega-chamomile-macos-universal.zip
+          cp build/macos/mega-chamomile-macos-universal.zip packages/
+
+      - name: Upload packaged builds to workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-builds-${{ github.run_number }}-${{ github.run_attempt }}
+          path: packages/*.zip
+          if-no-files-found: error
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          short_sha="${GITHUB_SHA::7}"
+
+          gh release create "$tag" packages/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Mega Chamomile build ${GITHUB_RUN_NUMBER} (${short_sha})" \
+            --notes "Automated desktop builds from commit ${GITHUB_SHA}. The macOS build is universal and supports both Intel and Apple Silicon. Builds are unsigned."

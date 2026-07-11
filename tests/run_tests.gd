@@ -19,6 +19,9 @@ func _initialize() -> void:
 	test_disconnect_wins()
 	test_solo_mode()
 	test_paint_splat()
+	test_paint_stroke()
+	test_hud_passes_mouse_through()
+	test_fall_recovery()
 
 	print("")
 	if _failures == 0:
@@ -178,22 +181,103 @@ func test_paint_splat() -> void:
 		total += body._part_positions[i].size()
 	check(total > 1000, "subdivided body has real vertex density (%d verts)" % total)
 
-	# Splat red on the front of the head (part 5, local body-space point).
+	# Splat red on the front of the head (body-space point).
 	var head_center: Vector3 = PaintableBodyScript.PARTS[5]["pos"]
 	var front := head_center + Vector3(0, 0, -0.18)
-	body.splat(5, front, Color.RED, 0.1)
+	body.splat_at(front, Color.RED, 0.1)
+	var painted := _count_painted(body, 5, Color.RED)
+	var back_painted := 0
 	var colors: PackedColorArray = body._part_colors[5]
 	var verts: PackedVector3Array = body._part_positions[5]
-	var painted := 0
-	var back_painted := 0
 	for i in verts.size():
-		if colors[i].r > 0.9 and colors[i].g < 0.5:
-			painted += 1
-			if verts[i].z > 0.1:  # back of the head, part-local space
-				back_painted += 1
+		if colors[i].r > 0.9 and colors[i].g < 0.5 and verts[i].z > 0.1:
+			back_painted += 1  # back of the head, part-local space
 	check(painted > 0, "splat painted vertices near the hit (%d)" % painted)
 	check(back_painted == 0, "back of the head stayed white")
 
 	body.fill_all(Color.BLUE)
 	check(body._part_colors[0][0].is_equal_approx(Color.BLUE), "fill_all recolors everything")
 	body.free()
+
+
+func _count_painted(body: PaintableBody, part_idx: int, color: Color) -> int:
+	var n := 0
+	for c: Color in body._part_colors[part_idx]:
+		if _colors_close(c, color):
+			n += 1
+	return n
+
+
+func _colors_close(a: Color, b: Color, tolerance := 0.3) -> bool:
+	return Vector4(a.r, a.g, a.b, a.a).distance_to(
+			Vector4(b.r, b.g, b.b, b.a)) < tolerance
+
+
+func test_paint_stroke() -> void:
+	print("paint strokes:")
+	var body: PaintableBody = PaintableBodyScript.new()
+	body.build(1, Color.WHITE)
+
+	# Drag across the torso front: endpoints 0.4m apart with a 0.06 brush.
+	# Only stroke interpolation can reach the midpoint.
+	var torso: Vector3 = PaintableBodyScript.PARTS[2]["pos"]
+	body.stroke(torso + Vector3(-0.2, 0.1, -0.14), torso + Vector3(0.2, 0.1, -0.14),
+			Color.RED, 0.06)
+	var colors: PackedColorArray = body._part_colors[2]
+	var verts: PackedVector3Array = body._part_positions[2]
+	var mid_painted := 0
+	for i in verts.size():
+		if _colors_close(colors[i], Color.RED) and absf(verts[i].x) < 0.05 \
+				and verts[i].z < -0.1:
+			mid_painted += 1
+	check(mid_painted > 0, "stroke filled in between the endpoints (%d mid verts)" % mid_painted)
+
+	# A stamp at the torso/arm boundary paints both parts — no seams.
+	body.splat_at(Vector3(0.26, 1.15, -0.11), Color.GREEN, 0.08)
+	check(_count_painted(body, 2, Color.GREEN) > 0, "boundary stamp reached the torso")
+	check(_count_painted(body, 4, Color.GREEN) > 0, "boundary stamp reached the right arm")
+	body.free()
+
+
+func test_hud_passes_mouse_through() -> void:
+	print("hud mouse filters:")
+	# A STOP control at screen center (the crosshair) eats captured-mouse
+	# motion before it reaches the player, killing camera orbit.
+	var hud: CanvasLayer = load("res://scripts/hud.gd").new()
+	# SceneTree's _initialize runs before newly attached nodes receive _ready,
+	# so build the code-created HUD explicitly for this synchronous test.
+	hud._ready()
+	var bad: Array = []
+	_collect_stop_controls(hud, bad)
+	check(bad.is_empty(), "every HUD control ignores mouse (offenders: %s)" % [bad])
+	hud.set_paint_mode(true)
+	hud.set_brush_cursor(Vector2(120, 80), 14.0, Color.CORAL)
+	check(hud._brush_ring.visible, "paint mode shows the brush ring")
+	check(hud._ring_pos == Vector2(120, 80) and is_equal_approx(hud._ring_px, 14.0),
+			"brush ring tracks cursor position and projected radius")
+	hud.show_results([], 0, 1)
+	bad.clear()
+	_collect_stop_controls(hud, bad)
+	check(bad.is_empty(), "results overlay ignores mouse too (offenders: %s)" % [bad])
+	hud.free()
+
+
+func _collect_stop_controls(node: Node, bad: Array) -> void:
+	if node is Control and node.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		bad.append(node.name)
+	for child in node.get_children():
+		_collect_stop_controls(child, bad)
+
+
+func test_fall_recovery() -> void:
+	print("fall recovery:")
+	var player: CharacterBody3D = load("res://scripts/player.gd").new()
+	player.respawn_position = Vector3(8, 1, -8)
+	player.position = Vector3(30, -25, 40)
+	player.velocity = Vector3(2, -30, 4)
+	player._target_pos = player.position
+	player.recover_from_fall()
+	check(player.position == player.respawn_position, "fallen player returns to assigned spawn")
+	check(player.velocity == Vector3.ZERO, "fall recovery clears momentum")
+	check(player._target_pos == player.respawn_position, "network interpolation target also resets")
+	player.free()

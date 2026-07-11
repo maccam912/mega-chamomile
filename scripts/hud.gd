@@ -22,6 +22,7 @@ var _bottom_hider: HBoxContainer
 var _hint_label: Label
 var _cross: ColorRect
 var _paint_mode_label: Label
+var _brush_ring: Control
 
 var _time_left := 0.0
 var _counting := false
@@ -29,6 +30,8 @@ var _spot_pulse := 0.0
 var _paint_mode := false
 var _brush_radius := 0.09
 var _brush_color := Color.WHITE
+var _ring_pos := Vector2.ZERO
+var _ring_px := 0.0
 
 
 func _ready() -> void:
@@ -116,6 +119,13 @@ func _ready() -> void:
 	_cross.position = Vector2(-2.5, -2.5)
 	root.add_child(_cross)
 
+	# Brush ring: follows the cursor in paint mode at true projected size.
+	_brush_ring = Control.new()
+	_brush_ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_brush_ring.visible = false
+	_brush_ring.draw.connect(_draw_brush_ring)
+	root.add_child(_brush_ring)
+
 	# Bottom-center: hider palette info.
 	_bottom_hider = HBoxContainer.new()
 	_bottom_hider.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -173,6 +183,19 @@ func _ready() -> void:
 	_results.visible = false
 	root.add_child(_results)
 
+	_pass_mouse_through(root)
+
+
+## HUD chrome must never eat input. Controls default to MOUSE_FILTER_STOP, and
+## while the mouse is captured every motion event lands at dead center — right
+## on the crosshair — so a STOP control there consumes the event before it can
+## reach the player's _unhandled_input, killing camera orbit entirely.
+func _pass_mouse_through(c: Control) -> void:
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child in c.get_children():
+		if child is Control:
+			_pass_mouse_through(child)
+
 
 func _process(delta: float) -> void:
 	if _counting:
@@ -229,8 +252,29 @@ func set_paint_mode(on: bool) -> void:
 		return
 	_paint_mode = on
 	_cross.visible = not on
+	_brush_ring.visible = on
 	_paint_mode_label.visible = on
 	_brush_label.text = PAINT_HINT if on else MOVE_HINT
+
+
+## Called every frame while paint mode is on: cursor position in viewport
+## pixels plus the brush's projected on-screen radius.
+func set_brush_cursor(pos: Vector2, radius_px: float, color: Color) -> void:
+	_ring_pos = pos
+	_ring_px = maxf(radius_px, 3.0)
+	_brush_color = color
+	_brush_ring.queue_redraw()
+
+
+func _draw_brush_ring() -> void:
+	var c := _brush_color
+	c.a = 1.0
+	# Dark halo first so the ring reads against bright walls too.
+	_brush_ring.draw_arc(_ring_pos, _ring_px, 0.0, TAU, 48, Color(0, 0, 0, 0.55), 3.5, true)
+	_brush_ring.draw_arc(_ring_pos, _ring_px, 0.0, TAU, 48, c, 1.8, true)
+	# Keep the exact cursor pixel transparent: the eyedropper samples that pixel
+	# from the rendered viewport, so drawing a center dot makes it resample the
+	# current brush color instead of the surface underneath.
 
 
 func _draw_brush_preview() -> void:
@@ -309,3 +353,5 @@ func show_results(scores: Array, winner: int, my_id: int) -> void:
 	back.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	back.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(back)
+
+	_pass_mouse_through(_results)

@@ -3,7 +3,7 @@ extends Node3D
 ## A blocky humanoid built from subdivided BoxMeshes whose vertices can be
 ## painted. Painting sets vertex colors within a brush radius of a point in
 ## this node's local space — no UVs, no texture readback, and a paint stroke
-## replicates as just (part_index, local_pos, color, radius).
+## replicates as just (from_pos, to_pos, color, radius).
 ##
 ## Each part also gets a StaticBody3D on collision layer 2 ("paintable") with
 ## metadata: part_idx (int) and peer_id (set by the owning player) so paint
@@ -21,6 +21,8 @@ const PARTS := [
 	{"name": "Head", "size": Vector3(0.36, 0.36, 0.36), "pos": Vector3(0, 1.5, 0)},
 ]
 const VERT_SPACING := 0.05
+const STAMP_SPACING := 0.5  ## stroke stamps this fraction of the radius apart
+const MAX_STAMPS := 24      ## safety cap per stroke segment
 
 var part_meshes: Array[MeshInstance3D] = []
 var part_bodies: Array[StaticBody3D] = []
@@ -78,38 +80,46 @@ func build(peer_id: int, base_color: Color) -> void:
 		_part_positions.append(verts)
 		_part_colors.append(colors)
 
-	# A little nose so you can tell which way someone faces.
-	var nose := MeshInstance3D.new()
-	var nose_mesh := BoxMesh.new()
-	nose_mesh.size = Vector3(0.08, 0.08, 0.08)
-	nose.mesh = nose_mesh
-	nose.position = PARTS[5]["pos"] + Vector3(0, -0.04, -0.2)
-	var nose_mat := StandardMaterial3D.new()
-	nose_mat.albedo_color = Color(0.25, 0.25, 0.28)
-	nose_mat.roughness = 0.9
-	nose.material_override = nose_mat
-	add_child(nose)
+## Paints one soft-edged splat at a body-space point. Every part the brush
+## sphere touches gets painted, so strokes don't seam at part boundaries.
+func splat_at(local_pos: Vector3, color: Color, radius: float) -> void:
+	stroke(local_pos, local_pos, color, radius)
 
 
-## Paints a soft-edged splat. `local_pos` is in THIS node's space (body space),
-## which is what replicates over the wire.
-func splat(part_idx: int, local_pos: Vector3, color: Color, radius: float) -> void:
-	if part_idx < 0 or part_idx >= part_meshes.size():
-		return
-	var part_origin: Vector3 = PARTS[part_idx]["pos"]
-	var p := local_pos - part_origin  # into part-local space
-	var verts: PackedVector3Array = _part_positions[part_idx]
-	var colors: PackedColorArray = _part_colors[part_idx]
-	var changed := false
-	for i in verts.size():
-		var d := verts[i].distance_to(p)
-		if d <= radius:
-			var t: float = clampf((1.0 - d / radius) * 2.0, 0.0, 1.0)
-			colors[i] = colors[i].lerp(color, t)
-			changed = true
-	if changed:
-		_part_colors[part_idx] = colors
+## Stamps splats along a body-space segment so a fast brush drag leaves a
+## continuous line instead of spaced dots. This is what replicates over the
+## wire: (from, to, color, radius), expanded into stamps on every peer.
+func stroke(from_pos: Vector3, to_pos: Vector3, color: Color, radius: float) -> void:
+	var spacing := maxf(radius * STAMP_SPACING, 0.01)
+	var steps := mini(int(ceilf(from_pos.distance_to(to_pos) / spacing)), MAX_STAMPS)
+	var dirty := {}
+	_stamp(from_pos, color, radius, dirty)
+	for s in range(1, steps + 1):
+		_stamp(from_pos.lerp(to_pos, float(s) / steps), color, radius, dirty)
+	for part_idx: int in dirty:
 		_rebuild(part_idx)
+
+
+## Blend `color` into every vertex within `radius` of a body-space point,
+## across all parts. No rebuild; touched parts are recorded in `dirty`.
+func _stamp(local_pos: Vector3, color: Color, radius: float, dirty: Dictionary) -> void:
+	for part_idx in part_meshes.size():
+		var p: Vector3 = local_pos - PARTS[part_idx]["pos"]  # into part-local space
+		var reach: Vector3 = PARTS[part_idx]["size"] * 0.5 + Vector3.ONE * radius
+		if absf(p.x) > reach.x or absf(p.y) > reach.y or absf(p.z) > reach.z:
+			continue  # brush sphere can't touch this part
+		var verts: PackedVector3Array = _part_positions[part_idx]
+		var colors: PackedColorArray = _part_colors[part_idx]
+		var changed := false
+		for i in verts.size():
+			var d := verts[i].distance_to(p)
+			if d <= radius:
+				var t: float = clampf((1.0 - d / radius) * 2.0, 0.0, 1.0)
+				colors[i] = colors[i].lerp(color, t)
+				changed = true
+		if changed:
+			_part_colors[part_idx] = colors
+			dirty[part_idx] = true
 
 
 func fill_all(color: Color) -> void:
