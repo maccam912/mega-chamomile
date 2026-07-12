@@ -296,7 +296,9 @@ func set_ragdoll(active: bool) -> void:
 
 func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void:
 	_time_left = duration
-	_counting = true
+	_counting = phase == MatchState.Phase.PAINT or phase == MatchState.Phase.SEEK
+	_timer_label.text = "" if not _counting else _timer_label.text
+	_blindfold_timer.text = "" if not _counting else _blindfold_timer.text
 	# The server broadcasts the RESULTS scores before the phase change, so the
 	# already-visible scoreboard must survive this call.
 	if phase != MatchState.Phase.RESULTS:
@@ -485,7 +487,7 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 		_replay_start_button = null
 
 	var back := Label.new()
-	back.text = "If not everyone readies up, the lobby returns shortly."
+	back.text = "Results stay open until the host starts the next round. Press Esc to leave."
 	back.add_theme_font_size_override("font_size", 14)
 	back.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	back.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

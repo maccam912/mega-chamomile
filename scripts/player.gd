@@ -5,6 +5,7 @@ extends CharacterBody3D
 
 const SPEED := 5.0
 const CROUCH_SPEED := 2.4
+const HIDER_SEEK_SPEED_MULTIPLIER := 0.2
 const JUMP_VELOCITY := 4.6
 const WALL_CLIMB_SPEED := 2.5
 const FLY_SPEED := 8.0
@@ -157,6 +158,10 @@ func on_phase(new_phase: int, extra: Dictionary) -> void:
 				frozen = role == MatchState.Role.SEEKER
 			MatchState.Phase.SEEK:
 				frozen = false
+				# Do not carry paint-phase sprint momentum into the hunt. Jump and
+				# wall-climb stay vertical-only and retain their authored speeds.
+				velocity = velocity_for_phase_entry(velocity, role, phase, eliminated,
+						Input.is_action_pressed("crouch"))
 				if role == MatchState.Role.SEEKER and extra.has("ammo"):
 					ammo = extra["ammo"]
 			MatchState.Phase.RESULTS:
@@ -329,7 +334,7 @@ func _local_move(delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var cam_yaw := _rig.global_rotation.y
 	var dir := (Basis(Vector3.UP, cam_yaw) * Vector3(input_dir.x, 0, input_dir.y)).normalized()
-	var speed := CROUCH_SPEED if crouching else SPEED
+	var speed := horizontal_speed_for_state(role, phase, eliminated, crouching)
 	if dir != Vector3.ZERO:
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
@@ -352,6 +357,34 @@ func _local_move(delta: float) -> void:
 ## camera-relative.
 static func yaw_for_travel(dir: Vector3) -> float:
 	return atan2(-dir.x, -dir.z)
+
+
+## Living hiders lose horizontal evasion speed only during SEEK. Keeping this
+## state rule pure makes phase/role/replay behavior directly testable without a
+## physics scene; eliminated players branch to spectator flight before using it.
+static func horizontal_speed_for_state(player_role: int, current_phase: int,
+		is_eliminated: bool, crouching: bool) -> float:
+	var speed := CROUCH_SPEED if crouching else SPEED
+	if player_role == MatchState.Role.HIDER and current_phase == MatchState.Phase.SEEK \
+			and not is_eliminated:
+		return speed * HIDER_SEEK_SPEED_MULTIPLIER
+	return speed
+
+
+## Clamp only horizontal momentum as SEEK begins; vertical jump/fall momentum
+## remains continuous across the phase boundary.
+static func velocity_for_phase_entry(current: Vector3, player_role: int,
+		current_phase: int, is_eliminated: bool, crouching: bool) -> Vector3:
+	if player_role != MatchState.Role.HIDER or current_phase != MatchState.Phase.SEEK \
+			or is_eliminated:
+		return current
+	var horizontal := Vector2(current.x, current.z)
+	var limit := horizontal_speed_for_state(
+			player_role, current_phase, is_eliminated, crouching)
+	if horizontal.length() <= limit:
+		return current
+	horizontal = horizontal.normalized() * limit
+	return Vector3(horizontal.x, current.y, horizontal.y)
 
 
 ## Holding jump supplies a steady climb only while airborne and touching a

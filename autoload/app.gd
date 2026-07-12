@@ -28,7 +28,6 @@ var settings := {
 	"seeker_count": 1,
 	"paint_time": 90.0,
 	"seek_time": 180.0,
-	"results_time": 12.0,
 	"shot_cooldown": 0.8,
 	"ammo_per_hider": 3,
 }
@@ -52,7 +51,6 @@ func _ready() -> void:
 	if cli.has("fast-phases"):
 		settings["paint_time"] = 4.0
 		settings["seek_time"] = 6.0
-		settings["results_time"] = 3.0
 	if cli.has("screenshot"):
 		var st := Timer.new()
 		st.wait_time = float(cli.get("screenshot-at", "8"))

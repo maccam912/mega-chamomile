@@ -12,6 +12,10 @@ requests. It is planning documentation; items are unimplemented unless marked
 - `ROUND-01` **SHIPPED**: every player can ready up from results; once all
   connected players opt in, the host can immediately reload the game scene for
   another round without breaking up the lobby.
+- `ROUND-03` **SHIPPED**: results remain open without a countdown until the host
+  deliberately starts the next round or a player leaves.
+- `MOVE-02` **SHIPPED**: living hiders move at 20% horizontal speed during SEEK;
+  seekers, spectators, jump height, and wall-climb speed remain unchanged.
 - `SCORE-02` **SHIPPED**: results show current-round and cumulative session
   totals. Totals survive replay and ordinary returns to the same lobby, and
   reset when the player leaves or a new host/join session begins.
@@ -46,7 +50,7 @@ after investigation, especially for bugs.
 | `SCORE-01` | S–M | High | `SCORE-02`, `SETTINGS-01` | The core survival and line-of-sight scoring already exists; breakdowns and configuration are the new work. |
 | `HIDE-01` | **SHIPPED** | High | `ROUND-01`, `CAMERA-01` | Server-authoritative readiness gates an explicit host early-start action. |
 | `ROUND-02` | S | High | `MOVE-02`, round-end rules | The server already owns ammo and round completion; the final shot must resolve before checking for total ammo exhaustion. |
-| `MOVE-02` | S | High | `ROUND-02`, `SETTINGS-01` | Apply a seek-phase-only 0.2 multiplier to living hiders while leaving seekers and the paint phase unchanged. |
+| `MOVE-02` | **SHIPPED** | High | `ROUND-02`, `SETTINGS-01` | Living hiders now use a fixed seek-phase-only 0.2 horizontal speed multiplier. |
 | `PAINT-01` | **SHIPPED** | High | Paint regression tests | Camera-ray-aligned cylindrical strokes paint front and hidden back surfaces while retaining the brush footprint. |
 | `NET-01` | M | High | Lobby and main-menu UI | LAN discovery can advertise existing ENet hosts and present them in a join list while retaining manual IP as a fallback. |
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
@@ -55,7 +59,7 @@ after investigation, especially for bugs.
 | `MOVE-01` | **SHIPPED** | High | Movement regression tests | Continuous climbing requires wall contact; hold-to-confirm unstuck has a cooldown and is disabled while frozen. |
 | `MOVE-03` | S–M | High | `MOVE-01`, Hallwyl map collision | Add map-specific perimeter recovery plus authoritative position validation so near-map escapes return players safely instead of leaving them outside. |
 | `ROUND-01` | **SHIPPED** | High | `ROLE-01`, `SCORE-02` | Results readiness gates a host-controlled same-session scene reload. |
-| `ROUND-03` | XS–S | High | `ROUND-01`, results presentation | Remove the RESULTS countdown and keep ready-up available until the lobby deliberately continues or leaves. |
+| `ROUND-03` | **SHIPPED** | High | `ROUND-01`, results presentation | RESULTS is now an untimed phase with stable scores and persistent ready-up controls. |
 | `ROLE-01` | L | High | `ROUND-01`, `SCORE-02` | Adds persistent history, preference UI, a fairness algorithm, replication, and many rule tests. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
@@ -85,12 +89,12 @@ These are good candidates when a small, independent improvement is wanted:
    deliver the smaller-character feel without changing player physics.
 9. `ROUND-02` — end seeking as soon as every remaining seeker has spent all
    ammunition, after resolving the final shot.
-10. `MOVE-02` — reduce living hiders to one-fifth movement speed once seeking
-    starts.
+10. **SHIPPED** — `MOVE-02`: living hiders move at one-fifth horizontal speed
+    once seeking starts.
 11. `MOVE-03` — add automatic Hallwyl perimeter recovery for players who slip
     just outside the museum without falling into the existing recovery plane.
-12. `ROUND-03` — remove the final results-screen timeout so players have as long
-    as they need to review scores and ready up.
+12. **SHIPPED** — `ROUND-03`: the final results screen stays open until players
+    deliberately replay or leave.
 
 `AVATAR-01` may look like a simple scale change but should not be treated as a
 quick body-scaling win because the current character is an articulated physics
@@ -205,7 +209,7 @@ and eliminations while the `Net` autoload preserves lobby-session state.
   blindly reused.
 - Players who do not opt in yet see a clear waiting/confirmation state.
 
-### ROUND-03: Keep the final results screen open indefinitely
+### ROUND-03: Keep the final results screen open indefinitely — **SHIPPED**
 
 **Problem:** The final RESULTS screen currently lasts only about ten seconds.
 That is not enough time for everyone to review the scoreboard, discuss the
@@ -215,6 +219,11 @@ round, and mark themselves ready for the next one.
 and its ready-up controls should remain available without a time limit until
 the players deliberately start the next round, return to the lobby, or leave
 the session.
+
+**Resolution:** RESULTS is now an untimed authoritative phase. Its HUD timer is
+stopped and hidden, final scores remain unchanged, and replay readiness stays
+active until the host deliberately starts the next round. Players can leave at
+any time through the existing Escape menu.
 
 **Acceptance criteria:**
 
@@ -349,7 +358,7 @@ seeker sweep.
 - Headless rule tests cover one seeker, multiple seekers, a final-shot miss, a
   final-shot elimination, and a final-shot seeker sweep.
 
-### MOVE-02: Slow hiders to one-fifth speed during seeking
+### MOVE-02: Slow hiders to one-fifth speed during seeking — **SHIPPED**
 
 **Problem:** After receiving the full hiding and painting head start, hiders can
 still run at normal speed during SEEK and dodge seekers instead of relying on
@@ -360,6 +369,13 @@ hider's intentional movement speed to 20% of its paint-phase value. Seekers keep
 their normal speed. The initial version should use a fixed `0.2` multiplier;
 it can become a validated host setting later through `SETTINGS-01` if playtests
 show that tuning is useful.
+
+**Resolution:** Player movement now derives horizontal speed from role, phase,
+elimination state, and crouch state. Living hiders use a fixed `0.2` multiplier
+during SEEK, including an early start, and paint-phase momentum is clamped when
+the hunt begins. Seekers and eliminated spectators remain at full speed. Jump
+and wall-climb speeds remain unchanged because they provide vertical traversal
+rather than sustained horizontal evasion.
 
 **Acceptance criteria:**
 

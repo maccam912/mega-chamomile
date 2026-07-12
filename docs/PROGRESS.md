@@ -3,7 +3,40 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: hidden readiness + early seeking shipped (session 6, 2026-07-12)
+## Status: seek-phase hider slowdown shipped (session 8, 2026-07-12)
+
+### Session 8: hider seek movement (`MOVE-02`)
+- **Living hiders move at 20% horizontal speed during SEEK.** Both standing and
+  crouched movement use the same fixed multiplier; PAINT movement and seeker
+  movement remain unchanged.
+- Entering SEEK clamps leftover paint-phase horizontal momentum so hiders
+  cannot carry a full-speed sprint into the hunt. Early SEEK uses the same
+  phase state and therefore applies the slowdown immediately.
+- Spectator flight, jump velocity, and wall-climb velocity remain unchanged.
+  Ragdoll mode does not move the hider body, so standing again cannot bypass
+  the state-derived speed.
+- Verified: 147 headless checks pass, including role/phase/crouch/replay and
+  early-SEEK coverage plus transition momentum clamping; Godot editor-load
+  check is clean.
+
+## Previous status: indefinite results screen shipped (session 7, 2026-07-12)
+
+### Session 7: untimed results (`ROUND-03`)
+- **RESULTS stays open indefinitely** instead of advancing to a `DONE` phase
+  and automatically returning everyone to the lobby. The host deliberately
+  starts a replay after all connected players ready up; anyone can still leave
+  through the Escape menu.
+- The results countdown setting and automatic lobby-return RPC were removed.
+  The HUD clears and stops its timer in RESULTS, and its guidance now explains
+  that the screen remains open.
+- Final score snapshots do not change while the phase is open, and readiness
+  continues to react to player toggles and disconnects through the existing
+  session state.
+- Verified: 137 headless checks pass, including ticking RESULTS two minutes
+  beyond the old timeout and checking stable scores; Godot editor-load check is
+  clean.
+
+## Previous status: hidden readiness + early seeking shipped (session 6, 2026-07-12)
 
 ### Session 6: paint-phase readiness (`HIDE-01`)
 - **Hiders can report ready** from the PAINT HUD or with `H`, and can undo that
@@ -25,8 +58,8 @@ build is so a fresh session can pick up instantly.
 - **Quick replay from results** (`ROUND-01`): every player gets a reversible
   Ready for Next Round confirmation. The host's Start Next Round button unlocks
   only when every connected player has opted in, then reloads the game scene
-  without disconnecting the lobby. A replay-loading guard prevents the old
-  RESULTS timer from racing the new scene back to the lobby.
+  without disconnecting the lobby. `ROUND-03` subsequently removed the RESULTS
+  timer entirely.
 - **Cumulative session scoring** (`SCORE-02`): new pure `SessionState` tracks
   integer totals across round scene reloads. Results show both round and session
   points and sort by the cumulative total. Leaving/new host/new join resets the

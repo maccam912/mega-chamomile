@@ -28,6 +28,7 @@ func _initialize() -> void:
 	test_articulated_ragdoll()
 	test_hud_passes_mouse_through()
 	test_travel_facing()
+	test_seek_hider_slowdown()
 	test_wall_climb()
 	test_unstuck_action()
 	test_fall_recovery()
@@ -52,7 +53,7 @@ func check(cond: bool, label: String) -> void:
 
 func _make(n_players: int, seeker_count: int, cfg := {}) -> MatchState:
 	var ms: MatchState = MatchStateScript.new()
-	var defaults := {"paint_time": 5.0, "seek_time": 10.0, "results_time": 2.0}
+	var defaults := {"paint_time": 5.0, "seek_time": 10.0}
 	defaults.merge(cfg, true)
 	ms.configure(defaults)
 	for i in n_players:
@@ -97,7 +98,13 @@ func test_full_match_hiders_survive() -> void:
 			score = row["score"]
 	# ~10s survival @1/s + 75 survive bonus = ~85
 	check(score >= 84 and score <= 86, "hider score = survival + bonus (got %d)" % score)
-	check(_tick_until(ms, MatchState.Phase.DONE), "RESULTS rolls into DONE")
+	var final_scores := ms.scores_snapshot()
+	ms.tick(120.0)
+	check(ms.phase == MatchState.Phase.RESULTS,
+			"RESULTS remains open well beyond the old timeout")
+	check(ms.time_left == 0.0, "RESULTS has no misleading countdown")
+	check(ms.scores_snapshot() == final_scores,
+			"final scores remain stable while RESULTS stays open")
 
 
 func test_sweep_seekers_win() -> void:
@@ -415,6 +422,8 @@ func test_hud_passes_mouse_through() -> void:
 	# Scores arrive before the RESULTS phase broadcast; the overlay must survive it.
 	hud.on_phase(MatchStateScript.Phase.RESULTS, 3.0, MatchStateScript.Role.HIDER, {})
 	check(hud._results.visible, "RESULTS phase change keeps the scoreboard visible")
+	check(not hud._counting and hud._timer_label.text.is_empty(),
+			"RESULTS phase hides and stops the HUD countdown")
 	hud.on_phase(MatchStateScript.Phase.PAINT, 5.0, MatchStateScript.Role.HIDER, {})
 	check(not hud._results.visible, "next round's PAINT phase clears the scoreboard")
 	hud.setup(MatchStateScript.Role.HIDER, true)
@@ -448,6 +457,48 @@ func test_travel_facing() -> void:
 		var facing := Basis(Vector3.UP, yaw) * Vector3.FORWARD
 		check(facing.is_equal_approx(dir),
 				"character faces travel direction %s (got %s)" % [dir, facing])
+
+
+func test_seek_hider_slowdown() -> void:
+	print("seek-phase hider slowdown:")
+	var player_script := load("res://scripts/player.gd")
+	var hider := MatchStateScript.Role.HIDER
+	var seeker := MatchStateScript.Role.SEEKER
+	var paint := MatchStateScript.Phase.PAINT
+	var seek := MatchStateScript.Phase.SEEK
+	check(is_equal_approx(
+			player_script.horizontal_speed_for_state(hider, paint, false, false),
+			player_script.SPEED), "hiders keep normal speed throughout PAINT")
+	check(is_equal_approx(
+			player_script.horizontal_speed_for_state(hider, seek, false, false),
+			player_script.SPEED * 0.2), "living hiders move at one-fifth speed in SEEK")
+	check(is_equal_approx(
+			player_script.horizontal_speed_for_state(hider, seek, false, true),
+			player_script.CROUCH_SPEED * 0.2), "crouching cannot bypass the slowdown")
+	check(is_equal_approx(
+			player_script.horizontal_speed_for_state(seeker, seek, false, false),
+			player_script.SPEED), "seekers retain full movement speed")
+	check(is_equal_approx(
+			player_script.horizontal_speed_for_state(hider, seek, true, false),
+			player_script.SPEED), "eliminated hiders do not inherit the movement penalty")
+	check(is_equal_approx(
+			player_script.horizontal_speed_for_state(hider, paint, false, true),
+			player_script.CROUCH_SPEED), "replay PAINT restores full crouched speed")
+
+	var ms := _make(3, 1, {"paint_time": 100.0})
+	ms.start()
+	for id: int in ms.hiders():
+		ms.set_hidden(id, true)
+	check(ms.start_seek_early(), "early-seek transition activates the SEEK speed state")
+	check(is_equal_approx(player_script.horizontal_speed_for_state(
+			hider, ms.phase, false, false), player_script.SPEED * 0.2),
+			"early SEEK uses the same one-fifth hider speed")
+	var entry_velocity: Vector3 = player_script.velocity_for_phase_entry(
+			Vector3(player_script.SPEED, 1.0, 0.0), hider, seek, false, false)
+	check(is_equal_approx(Vector2(entry_velocity.x, entry_velocity.z).length(),
+			player_script.SPEED * 0.2), "SEEK entry clamps carried paint-phase momentum")
+	check(is_equal_approx(entry_velocity.y, 1.0),
+			"SEEK entry does not change vertical momentum")
 
 
 func test_wall_climb() -> void:

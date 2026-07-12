@@ -378,19 +378,6 @@ func _receive_despawn(peer_id: int) -> void:
 	player_despawned.emit(peer_id)
 
 
-func broadcast_back_to_lobby() -> void:
-	rpc(&"_receive_back_to_lobby")
-
-
-@rpc("authority", "call_local", "reliable")
-func _receive_back_to_lobby() -> void:
-	print("[net] back to lobby")
-	_accepting_replay_ready = false
-	App.in_match = false
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	App.goto_scene(App.LOBBY_SCENE)
-
-
 # --- gameplay requests (client -> server) -----------------------------------
 
 ## Seeker asks the server to fire a shot from their camera ray.

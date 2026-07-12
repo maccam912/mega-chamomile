@@ -131,13 +131,9 @@ func _server_on_phase_entered(phase: int) -> void:
 			if not match_state.seekers().is_empty():
 				extra["ammo"] = match_state.ammo_of(match_state.seekers()[0])
 		MatchState.Phase.RESULTS:
-			duration = match_state.cfg["results_time"]
 			var scores := Net.record_round_scores(match_state.scores_snapshot())
 			Net.broadcast_scores(scores, match_state.winner)
 			Net.begin_replay_readiness()
-		MatchState.Phase.DONE:
-			Net.broadcast_back_to_lobby()
-			return
 	Net.broadcast_phase(phase, duration, extra)
 
 
@@ -354,8 +350,6 @@ func _on_hiding_readiness_changed(hidden_count: int, hider_count: int, my_hidden
 
 
 func _on_replay_start_requested() -> void:
-	# Stop the old results timer before scheduling the same-scene reload. This
-	# prevents its DONE transition from racing the replay into the lobby.
 	_replay_loading = Net.request_replay_start()
 
 
