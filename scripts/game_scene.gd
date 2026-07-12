@@ -109,6 +109,7 @@ func _server_setup_match() -> void:
 		payload["players"].append({
 			"id": id,
 			"name": match_state.players[id]["name"],
+			"avatar": AvatarCatalog.normalize(str(Net.players[id].get("avatar", AvatarCatalog.DEFAULT_ID))),
 			"role": role,
 			"pos": pos,
 		})
@@ -183,12 +184,12 @@ func _server_update_line_of_sight() -> void:
 		if hider == null:
 			continue
 		var seen := false
-		var target: Vector3 = hider.global_position + Vector3(0, 1.0, 0)
+		var target: Vector3 = hider.target_position_global()
 		for seeker_id: int in match_state.seekers():
 			var seeker := _player(seeker_id)
 			if seeker == null:
 				continue
-			var eye: Vector3 = seeker.global_position + Vector3(0, 1.45, 0)
+			var eye: Vector3 = seeker.eye_position_global()
 			var to_hider := target - eye
 			if to_hider.length() > LOS_MAX_DIST:
 				continue
@@ -258,6 +259,7 @@ func _spawn_player(info: Dictionary) -> void:
 	var p := PLAYER_SCENE.instantiate()
 	p.name = str(int(info["id"]))
 	p.display_name = str(info["name"])
+	p.avatar_id = AvatarCatalog.normalize(str(info.get("avatar", AvatarCatalog.DEFAULT_ID)))
 	p.role = int(info["role"])
 	p.position = info["pos"]
 	p.respawn_position = info["pos"]

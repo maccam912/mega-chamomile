@@ -6,6 +6,10 @@ var _start_btn: Button
 var _seeker_spin: SpinBox
 var _map_option: OptionButton
 var _hint: Label
+var _avatar_option: OptionButton
+var _preview_root: Node3D
+var _preview_camera: Camera3D
+var _preview_body: PaintableBody
 
 
 func _ready() -> void:
@@ -55,6 +59,8 @@ func _build_ui() -> void:
 	_player_list.add_theme_constant_override("separation", 6)
 	_player_list.custom_minimum_size = Vector2(0, 180)
 	panel.add_child(_player_list)
+
+	_build_avatar_picker(box)
 
 	if Net.is_server():
 		_seeker_spin = _add_setting_spin(box, "Seekers:", "seeker_count", 1, 8, 1)
@@ -109,6 +115,87 @@ func _build_ui() -> void:
 		box.add_child(last)
 
 
+func _build_avatar_picker(box: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.custom_minimum_size = Vector2(0, 180)
+	row.add_theme_constant_override("separation", 14)
+	box.add_child(row)
+
+	var controls := VBoxContainer.new()
+	controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(controls)
+	var label := Label.new()
+	label.text = "Your body:"
+	controls.add_child(label)
+	_avatar_option = OptionButton.new()
+	for avatar_id: String in AvatarCatalog.ORDER:
+		var index := _avatar_option.item_count
+		_avatar_option.add_item(AvatarCatalog.label(avatar_id))
+		_avatar_option.set_item_metadata(index, avatar_id)
+		if avatar_id == App.selected_avatar:
+			_avatar_option.select(index)
+	_avatar_option.item_selected.connect(_on_avatar_selected)
+	controls.add_child(_avatar_option)
+	var note := Label.new()
+	note.text = "All bodies use the same paint and ragdoll systems."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_font_size_override("font_size", 12)
+	note.add_theme_color_override("font_color", Color("8a92a6"))
+	controls.add_child(note)
+
+	var preview_container := SubViewportContainer.new()
+	preview_container.custom_minimum_size = Vector2(210, 180)
+	preview_container.stretch = true
+	row.add_child(preview_container)
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(420, 360)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	preview_container.add_child(viewport)
+	_preview_root = Node3D.new()
+	viewport.add_child(_preview_root)
+	var environment := WorldEnvironment.new()
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color("20242f")
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color.WHITE
+	env.ambient_light_energy = 0.65
+	environment.environment = env
+	_preview_root.add_child(environment)
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-50, -35, 0)
+	light.light_energy = 1.2
+	_preview_root.add_child(light)
+	_preview_camera = Camera3D.new()
+	_preview_root.add_child(_preview_camera)
+	_preview_camera.make_current()
+	_update_avatar_preview(App.selected_avatar)
+
+
+func _on_avatar_selected(index: int) -> void:
+	var avatar_id := str(_avatar_option.get_item_metadata(index))
+	Net.request_avatar(avatar_id)
+	_update_avatar_preview(avatar_id)
+
+
+func _update_avatar_preview(avatar_id: String) -> void:
+	avatar_id = AvatarCatalog.normalize(avatar_id)
+	if _preview_body != null:
+		_preview_body.free()
+	_preview_body = PaintableBody.new()
+	_preview_root.add_child(_preview_body)
+	_preview_body.build(0, Color("e7ded0"), avatar_id)
+	_preview_body.set_parts_collidable(false)
+	var height := float(AvatarCatalog.profile(avatar_id).get("preview_height", 1.8))
+	_preview_camera.position = Vector3(2.0, height * 0.72, -2.5)
+	_preview_camera.look_at(Vector3(0, height * 0.48, 0))
+
+
+func _process(delta: float) -> void:
+	if _preview_body != null:
+		_preview_body.rotation.y += delta * 0.35
+
+
 ## Labeled SpinBox row bound to one App.settings key. The initial value is set
 ## without emitting value_changed so CLI overrides outside the spinner's range
 ## (e.g. --fast-phases) are displayed clamped but never written back.
@@ -143,9 +230,18 @@ func _refresh() -> void:
 		var row := Label.new()
 		var tag := "  (host)" if id == 1 else ""
 		var me := "  <- you" if id == multiplayer.get_unique_id() else ""
-		row.text = "%s%s%s" % [Net.players[id]["name"], tag, me]
+		var avatar_id := AvatarCatalog.normalize(str(
+				Net.players[id].get("avatar", AvatarCatalog.DEFAULT_ID)))
+		row.text = "%s  —  %s%s%s" % [Net.players[id]["name"],
+				AvatarCatalog.label(avatar_id), tag, me]
 		row.add_theme_color_override("font_color", Color("d8dce6"))
 		_player_list.add_child(row)
+		if id == multiplayer.get_unique_id() and _avatar_option != null:
+			for index in _avatar_option.item_count:
+				if str(_avatar_option.get_item_metadata(index)) == avatar_id:
+					_avatar_option.select(index)
+					_update_avatar_preview(avatar_id)
+					break
 	if Net.is_server():
 		var n := ids.size()
 		_hint.text = "solo test mode: you'll hide with no seekers" if n == 1 else ""

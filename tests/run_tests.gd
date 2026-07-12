@@ -6,6 +6,7 @@ extends SceneTree
 const MatchStateScript := preload("res://scripts/match_state.gd")
 const SessionStateScript := preload("res://scripts/session_state.gd")
 const PaintableBodyScript := preload("res://scripts/paintable_body.gd")
+const AvatarCatalogScript := preload("res://scripts/avatar_catalog.gd")
 const AppScript := preload("res://autoload/app.gd")
 
 var _failures := 0
@@ -23,6 +24,7 @@ func _initialize() -> void:
 	test_hidden_readiness()
 	test_disconnect_wins()
 	test_solo_mode()
+	test_avatar_contracts()
 	test_paint_splat()
 	test_paint_stroke()
 	test_articulated_ragdoll()
@@ -280,6 +282,33 @@ func test_solo_mode() -> void:
 	check(ms.winner == MatchState.Team.HIDERS, "solo survivor wins")
 
 
+func test_avatar_contracts() -> void:
+	print("avatar contracts:")
+	check(AvatarCatalogScript.ORDER == ["human", "cat", "dog"],
+			"launch roster contains human, cat, and dog")
+	for avatar_id: String in AvatarCatalogScript.ORDER:
+		var errors := AvatarCatalogScript.contract_errors(avatar_id)
+		check(errors.is_empty(), "%s supplies the complete avatar contract: %s" % [
+				avatar_id, errors])
+		var avatar: PaintableBody = PaintableBodyScript.new()
+		avatar.build(17, Color.WHITE, avatar_id)
+		check(avatar.part_meshes.size() == avatar.parts.size() and not avatar.parts.is_empty(),
+				"%s builds every authored paintable part" % avatar_id)
+		check(avatar.joints.size() == avatar.parts.size() - 1,
+				"%s builds a connected articulated ragdoll" % avatar_id)
+		var first_pos: Vector3 = avatar.parts[0]["pos"]
+		avatar.splat_at(first_pos, Color.RED, 0.2, Vector3.BACK)
+		check(_count_painted(avatar, 0, Color.RED) > 0,
+				"%s parts use the shared through-body painting path" % avatar_id)
+		avatar.set_ragdoll(true, false)
+		check(avatar.capture_pose().size() == avatar.parts.size(),
+				"%s replicates every ragdoll transform" % avatar_id)
+		avatar.set_ragdoll(false, false)
+		check(avatar.part_bodies[0].transform.is_equal_approx(avatar._authored_transforms[0]),
+				"%s restores its authored standing pose" % avatar_id)
+		avatar.free()
+
+
 func test_paint_splat() -> void:
 	print("paintable body splats:")
 	var body: PaintableBody = PaintableBodyScript.new()
@@ -296,7 +325,7 @@ func test_paint_splat() -> void:
 	# Splat red on the front of the head along the camera ray. The cylindrical
 	# footprint must reach matching vertices on the hidden back face.
 	var head_idx := body.part_index("Head")
-	var head_center: Vector3 = PaintableBodyScript.PARTS[head_idx]["pos"]
+	var head_center: Vector3 = body.parts[head_idx]["pos"]
 	var front := head_center + Vector3(0, 0, -0.18)
 	body.splat_at(front, Color.RED, 0.1, Vector3.BACK)
 	var painted := _count_painted(body, head_idx, Color.RED)
@@ -344,7 +373,7 @@ func test_paint_stroke() -> void:
 	# Only stroke interpolation can reach the midpoint.
 	var torso_idx := body.part_index("Torso")
 	var arm_idx := body.part_index("UpperArmR")
-	var torso: Vector3 = PaintableBodyScript.PARTS[torso_idx]["pos"]
+	var torso: Vector3 = body.parts[torso_idx]["pos"]
 	body.stroke(torso + Vector3(-0.2, 0.1, -0.14), torso + Vector3(0.2, 0.1, -0.14),
 			Color.RED, 0.06, Vector3.BACK)
 	var colors: PackedColorArray = body._part_colors[torso_idx]

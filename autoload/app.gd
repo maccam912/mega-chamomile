@@ -36,6 +36,7 @@ var status_message := ""  ## shown on the main menu after disconnects/errors
 var last_scores: Array = []
 var last_winner: int = 0
 var in_match := false
+var selected_avatar := AvatarCatalog.DEFAULT_ID
 var cli := {}  ## parsed user args: name/host/join/autostart/fast-phases/quit-after
 
 var _ui_player: AudioStreamPlayer
@@ -45,6 +46,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_input_map()
 	_parse_cli()
+	if cli.has("avatar"):
+		select_avatar(str(cli["avatar"]))
 	_ui_player = AudioStreamPlayer.new()
 	_ui_player.stream = load("res://assets/audio/ui_click.ogg")
 	add_child(_ui_player)
@@ -89,6 +92,10 @@ func play_ui_click() -> void:
 
 func select_map(map_id: String) -> void:
 	settings["map_id"] = map_id if MAPS.has(map_id) else DEFAULT_MAP_ID
+
+
+func select_avatar(avatar_id: String) -> void:
+	selected_avatar = AvatarCatalog.normalize(avatar_id)
 
 
 func selected_map_scene() -> String:

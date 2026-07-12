@@ -1,26 +1,9 @@
 class_name PaintableBody
 extends Node3D
-## A segmented, paintable humanoid. Each box is a frozen RigidBody3D while the
-## player is walking; ragdoll mode releases the pieces into a jointed physics
-## rig. Paint is still stored as per-vertex color on each segment.
+## A segmented, paintable avatar. AvatarCatalog supplies the authored parts,
+## joints, and gameplay anchors; painting and ragdolling are shared by every rig.
 
 const PAINT_LAYER := 2
-
-## name, size, center position (body-local; feet at y=0), facing -Z.
-## Limb segments meet at the elbow/knee anchors so the joints read clearly.
-const PARTS := [
-	{"name": "LowerLegL", "size": Vector3(0.22, 0.36, 0.22), "pos": Vector3(-0.13, 0.18, 0)},
-	{"name": "LowerLegR", "size": Vector3(0.22, 0.36, 0.22), "pos": Vector3(0.13, 0.18, 0)},
-	{"name": "UpperLegL", "size": Vector3(0.24, 0.38, 0.24), "pos": Vector3(-0.13, 0.55, 0)},
-	{"name": "UpperLegR", "size": Vector3(0.24, 0.38, 0.24), "pos": Vector3(0.13, 0.55, 0)},
-	{"name": "Pelvis", "size": Vector3(0.46, 0.22, 0.28), "pos": Vector3(0, 0.81, 0)},
-	{"name": "Torso", "size": Vector3(0.5, 0.52, 0.28), "pos": Vector3(0, 1.15, 0)},
-	{"name": "UpperArmL", "size": Vector3(0.17, 0.31, 0.17), "pos": Vector3(-0.34, 1.245, 0)},
-	{"name": "UpperArmR", "size": Vector3(0.17, 0.31, 0.17), "pos": Vector3(0.34, 1.245, 0)},
-	{"name": "LowerArmL", "size": Vector3(0.16, 0.34, 0.16), "pos": Vector3(-0.34, 0.92, 0)},
-	{"name": "LowerArmR", "size": Vector3(0.16, 0.34, 0.16), "pos": Vector3(0.34, 0.92, 0)},
-	{"name": "Head", "size": Vector3(0.36, 0.36, 0.36), "pos": Vector3(0, 1.59, 0)},
-]
 
 const VERT_SPACING := 0.05
 const STAMP_SPACING := 0.5
@@ -30,17 +13,27 @@ var part_meshes: Array[MeshInstance3D] = []
 var part_bodies: Array[RigidBody3D] = []
 var joints: Array[Joint3D] = []
 var ragdolled := false
+var avatar_id := AvatarCatalog.DEFAULT_ID
+var profile: Dictionary = {}
+var parts: Array = []
 
 var _part_arrays: Array = []
 var _part_positions: Array = []
 var _part_colors: Array = []
 var _remote_targets: Array[Transform3D] = []
+var _authored_transforms: Array[Transform3D] = []
 
 
-func build(peer_id: int, base_color: Color) -> void:
-	for i in PARTS.size():
-		var spec: Dictionary = PARTS[i]
+func build(peer_id: int, base_color: Color,
+		selected_avatar := AvatarCatalog.DEFAULT_ID) -> void:
+	avatar_id = AvatarCatalog.normalize(selected_avatar)
+	profile = AvatarCatalog.profile(avatar_id)
+	parts = profile["parts"]
+	for i in parts.size():
+		var spec: Dictionary = parts[i]
 		var size: Vector3 = spec["size"]
+		var authored := Transform3D(
+				Basis.from_euler(spec.get("rot", Vector3.ZERO)), spec["pos"])
 		var box := BoxMesh.new()
 		box.size = size
 		box.subdivide_width = clampi(int(ceilf(size.x / VERT_SPACING)), 2, 14)
@@ -59,7 +52,7 @@ func build(peer_id: int, base_color: Color) -> void:
 
 		var rb := RigidBody3D.new()
 		rb.name = spec["name"] + "Physics"
-		rb.position = spec["pos"]
+		rb.transform = authored
 		rb.mass = maxf(0.25, size.x * size.y * size.z * 18.0)
 		rb.freeze = true
 		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
@@ -94,25 +87,19 @@ func build(peer_id: int, base_color: Color) -> void:
 		_part_arrays.append(arrays)
 		_part_positions.append(verts)
 		_part_colors.append(colors)
+		_authored_transforms.append(authored)
 
 	_build_joints()
 
 
 func _build_joints() -> void:
-	# Hinge joints keep elbows and knees bending in a human-looking plane.
-	_add_hinge("KneeL", "UpperLegL", "LowerLegL", Vector3(-0.13, 0.36, 0), -0.08, 2.35)
-	_add_hinge("KneeR", "UpperLegR", "LowerLegR", Vector3(0.13, 0.36, 0), -0.08, 2.35)
-	_add_hinge("ElbowL", "UpperArmL", "LowerArmL", Vector3(-0.34, 1.09, 0), -2.35, 0.08)
-	_add_hinge("ElbowR", "UpperArmR", "LowerArmR", Vector3(0.34, 1.09, 0), -2.35, 0.08)
-
-	# Ball-like constrained joints give the hips, shoulders, neck, and waist
-	# enough freedom to settle naturally without folding inside-out.
-	_add_cone("HipL", "Pelvis", "UpperLegL", Vector3(-0.13, 0.72, 0), 0.7, 0.35)
-	_add_cone("HipR", "Pelvis", "UpperLegR", Vector3(0.13, 0.72, 0), 0.7, 0.35)
-	_add_cone("Waist", "Pelvis", "Torso", Vector3(0, 0.91, 0), 0.4, 0.25)
-	_add_cone("ShoulderL", "Torso", "UpperArmL", Vector3(-0.3, 1.35, 0), 1.0, 0.65)
-	_add_cone("ShoulderR", "Torso", "UpperArmR", Vector3(0.3, 1.35, 0), 1.0, 0.65)
-	_add_cone("Neck", "Torso", "Head", Vector3(0, 1.41, 0), 0.35, 0.25)
+	for spec: Dictionary in profile["joints"]:
+		if spec["type"] == "hinge":
+			_add_hinge(spec["name"], spec["a"], spec["b"], spec["anchor"],
+					spec["lower"], spec["upper"])
+		else:
+			_add_cone(spec["name"], spec["a"], spec["b"], spec["anchor"],
+					spec["swing"], spec["twist"])
 
 
 func _add_hinge(joint_name: String, a_name: String, b_name: String,
@@ -147,8 +134,8 @@ func _add_joint(joint: Joint3D, a_name: String, b_name: String) -> void:
 
 
 func part_index(part_name: String) -> int:
-	for i in PARTS.size():
-		if PARTS[i]["name"] == part_name:
+	for i in parts.size():
+		if parts[i]["name"] == part_name:
 			return i
 	return -1
 
@@ -178,14 +165,14 @@ func set_ragdoll(active: bool, simulate: bool, inherited_velocity: Vector3 = Vec
 						+ inherited_angular_velocity.cross(radius)
 				rb.angular_velocity = inherited_angular_velocity
 		if simulate:
-			var torso := part_bodies[part_index("Torso")]
+			var root := part_bodies[part_index(profile["root_part"])]
 			# Tip toward current travel. At rest, retain the small forward nudge
 			# that prevents the released upright rig balancing on both feet.
 			var horizontal_motion := Vector3(inherited_velocity.x, 0, inherited_velocity.z)
 			var fall_direction := (
 					horizontal_motion.normalized() if horizontal_motion.length_squared() > 0.01
 					else -global_transform.basis.z)
-			torso.apply_central_impulse(fall_direction * 0.7 + Vector3.UP * 0.08)
+			root.apply_central_impulse(fall_direction * 0.7 + Vector3.UP * 0.08)
 	else:
 		for i in part_bodies.size():
 			var rb := part_bodies[i]
@@ -194,7 +181,7 @@ func set_ragdoll(active: bool, simulate: bool, inherited_velocity: Vector3 = Vec
 			rb.angular_velocity = Vector3.ZERO
 			rb.collision_mask = 0
 			rb.top_level = false
-			rb.transform = Transform3D(Basis.IDENTITY, PARTS[i]["pos"])
+			rb.transform = _authored_transforms[i]
 
 
 func capture_pose() -> Array[Transform3D]:
@@ -278,7 +265,7 @@ func _stamp(local_pos: Vector3, color: Color, radius: float,
 		# Cheap conservative rejection: if the paint axis misses a sphere around
 		# the entire part, it cannot touch any of that part's vertices.
 		var center_distance := _distance_to_axis(Vector3.ZERO, p, axis)
-		var part_radius: float = (PARTS[part_idx]["size"] as Vector3).length() * 0.5
+		var part_radius: float = (parts[part_idx]["size"] as Vector3).length() * 0.5
 		if center_distance > part_radius + radius:
 			continue
 		var verts: PackedVector3Array = _part_positions[part_idx]

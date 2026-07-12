@@ -23,6 +23,7 @@ const CAMERA_LOCAL_OFFSET := Vector3(0, 0, 0.1)
 
 var peer_id := 1
 var display_name := "?"
+var avatar_id := AvatarCatalog.DEFAULT_ID
 var role: int = MatchState.Role.NONE
 var phase: int = MatchState.Phase.LOBBY
 var eliminated := false
@@ -41,8 +42,10 @@ var _rig: Node3D
 var _spring: SpringArm3D
 var _camera: Camera3D
 var _nameplate: Label3D
-var _collision: CollisionShape3D
+var _collisions: Array[CollisionShape3D] = []
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var _camera_pivot := NORMAL_CAMERA_PIVOT
+var _orbit_length := ORBIT_SPRING_LENGTH
 
 var _sync_timer := 0.0
 var _stroke_active := false  ## LMB held and last sample hit our body
@@ -77,26 +80,30 @@ func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 1
 
-	_collision = CollisionShape3D.new()
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.32
-	capsule.height = 1.7
-	_collision.shape = capsule
-	_collision.position = Vector3(0, 0.85, 0)
-	add_child(_collision)
+	var avatar := AvatarCatalog.profile(avatar_id)
+	for collision_spec: Dictionary in avatar["collision_shapes"]:
+		var collision := CollisionShape3D.new()
+		var capsule := CapsuleShape3D.new()
+		capsule.radius = float(collision_spec["radius"])
+		capsule.height = float(collision_spec["height"])
+		collision.shape = capsule
+		collision.position = collision_spec["pos"]
+		add_child(collision)
+		_collisions.append(collision)
 
 	body = PaintableBody.new()
 	body.name = "Body"
 	add_child(body)
 	var base := Color(0.13, 0.13, 0.16) if role == MatchState.Role.SEEKER else Color.WHITE
-	body.build(peer_id, base)
+	body.build(peer_id, base, avatar_id)
+	avatar_id = body.avatar_id
 	if role == MatchState.Role.SEEKER:
 		_add_gun()
 
 	_nameplate = Label3D.new()
 	_nameplate.name = "Nameplate"
 	_nameplate.text = display_name
-	_nameplate.position = Vector3(0, 1.95, 0)
+	_nameplate.position = avatar["nameplate_position"]
 	_nameplate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_nameplate.font_size = 48
 	_nameplate.pixel_size = 0.004
@@ -118,11 +125,13 @@ func _ready() -> void:
 	_last_foot_pos = position
 
 	if is_local():
+		_camera_pivot = avatar["camera_pivot"]
+		_orbit_length = float(avatar["orbit_length"])
 		_rig = Node3D.new()
-		_rig.position = NORMAL_CAMERA_PIVOT
+		_rig.position = _camera_pivot
 		add_child(_rig)
 		_spring = SpringArm3D.new()
-		_spring.spring_length = ORBIT_SPRING_LENGTH
+		_spring.spring_length = _orbit_length
 		_spring.position = Vector3(0.35, 0, 0)  # slight over-shoulder offset
 		_spring.collision_mask = 1
 		_spring.add_excluded_object(get_rid())
@@ -142,7 +151,7 @@ func _add_gun() -> void:
 	var m := BoxMesh.new()
 	m.size = Vector3(0.1, 0.12, 0.7)
 	gun.mesh = m
-	gun.position = Vector3(0.34, 1.15, -0.3)
+	gun.position = body.profile["gun_position"]
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.12, 0.12, 0.13)
 	gun.material_override = mat
@@ -171,6 +180,15 @@ func on_phase(new_phase: int, extra: Dictionary) -> void:
 
 func set_nameplate_visible(v: bool) -> void:
 	_nameplate.visible = v
+
+
+func target_position_global() -> Vector3:
+	return body.center_of_mass_global() if ragdolled \
+			else global_transform * Vector3(body.profile["target_position"])
+
+
+func eye_position_global() -> Vector3:
+	return global_transform * Vector3(body.profile["eye_position"])
 
 
 func on_eliminated() -> void:
@@ -507,8 +525,8 @@ func set_ragdoll(active: bool) -> void:
 	ragdolled = active
 	body.scale = Vector3.ONE
 	velocity = Vector3.ZERO
-	if _collision != null:
-		_collision.set_deferred("disabled", active)
+	for collision in _collisions:
+		collision.set_deferred("disabled", active)
 	body.set_ragdoll(active, is_local(), inherited_velocity, inherited_angular_velocity)
 	if is_local():
 		if active:
@@ -534,13 +552,13 @@ func _enter_ragdoll_fly_camera() -> void:
 
 
 func _enter_ragdoll_orbit_camera() -> void:
-	_spring.spring_length = ORBIT_SPRING_LENGTH
+	_spring.spring_length = _orbit_length
 	_rig.global_position = body.center_of_mass_global()
 
 
 func _restore_follow_camera() -> void:
-	_spring.spring_length = ORBIT_SPRING_LENGTH
-	_rig.position = NORMAL_CAMERA_PIVOT
+	_spring.spring_length = _orbit_length
+	_rig.position = _camera_pivot
 
 
 ## Sample the brush under a screen point (cursor or crosshair) every frame
@@ -580,7 +598,7 @@ func brush_cursor_px(screen_point: Vector2) -> float:
 	var ref: Vector3 = (
 		Vector3(hit["position"]) if not hit.is_empty()
 		else body.center_of_mass_global() if ragdolled
-		else body.global_transform * Vector3(0, 1.0, 0)
+		else body.global_transform * Vector3(body.profile["target_position"])
 	)
 	var right: Vector3 = _camera.global_transform.basis.x
 	return _camera.unproject_position(ref).distance_to(

@@ -24,7 +24,7 @@ signal start_seeking_requested  ## server only
 
 const SessionStateScript := preload("res://scripts/session_state.gd")
 
-var players := {}  ## peer_id -> {"name": String}
+var players := {}  ## peer_id -> {"name": String, "avatar": String}
 var my_name := "Chamomile"
 
 var _ready_peers := {}
@@ -51,7 +51,7 @@ func host_game() -> Error:
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
-	players = {1: {"name": my_name}}
+	players = {1: {"name": my_name, "avatar": App.selected_avatar}}
 	session.reset([1])
 	_accepting_replay_ready = false
 	App.last_scores.clear()
@@ -110,7 +110,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 func _on_connected_ok() -> void:
-	rpc_id(1, &"_register_player", my_name)
+	rpc_id(1, &"_register_player", my_name, App.selected_avatar)
 	joined_ok.emit()
 
 
@@ -127,11 +127,14 @@ func _on_server_disconnected() -> void:
 # --- player registry ------------------------------------------------------
 
 @rpc("any_peer", "call_remote", "reliable")
-func _register_player(pname: String) -> void:
+func _register_player(pname: String, avatar_id: String) -> void:
 	if not is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
-	players[id] = {"name": pname.substr(0, 20)}
+	players[id] = {
+		"name": pname.substr(0, 20),
+		"avatar": AvatarCatalog.normalize(avatar_id),
+	}
 	session.add_player(id)
 	rpc(&"_sync_players", players)
 	players_changed.emit()
@@ -140,6 +143,31 @@ func _register_player(pname: String) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _sync_players(new_players: Dictionary) -> void:
 	players = new_players
+	players_changed.emit()
+
+
+## Lobby customization is server-authoritative and becomes part of the match
+## setup payload. Keeping it in the player registry also preserves replays.
+func request_avatar(avatar_id: String) -> void:
+	var normalized := AvatarCatalog.normalize(avatar_id)
+	App.select_avatar(normalized)
+	if is_server():
+		_set_player_avatar(1, normalized)
+	else:
+		rpc_id(1, &"_request_avatar", normalized)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_avatar(avatar_id: String) -> void:
+	if is_server():
+		_set_player_avatar(multiplayer.get_remote_sender_id(), avatar_id)
+
+
+func _set_player_avatar(id: int, avatar_id: String) -> void:
+	if App.in_match or not players.has(id):
+		return
+	players[id]["avatar"] = AvatarCatalog.normalize(avatar_id)
+	rpc(&"_sync_players", players)
 	players_changed.emit()
 
 

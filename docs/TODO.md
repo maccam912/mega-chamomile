@@ -65,7 +65,7 @@ after investigation, especially for bugs.
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
 | `NET-02` | M feasibility spike / XL migration | Low | `NET-01`, networking architecture | Iroh may enable identity-based connections, NAT traversal, and relay fallback, but replacing Godot ENet requires an integration prototype first. |
 | `MODE-01` | XL | High | Build after reusable round/settings state | Requires a second authoritative game loop, ghost state, tag handoffs, UI, scoring, and edge-case tests. |
-| `AVATAR-02` | XL | Medium | `AVATAR-01`, painting/ragdoll architecture | Distinct animal silhouettes require new paintable bodies, physics rigs, hitboxes, cameras, and balance rules. |
+| `AVATAR-02` | **SHIPPED** | Medium | Avatar contract + physics/play tests | Human, Cat, and Dog share one catalog-driven painting/ragdoll pipeline with replicated lobby selection. |
 
 ### Easiest useful slices
 
@@ -659,12 +659,21 @@ with Godot or this game's authoritative multiplayer model.
 
 ## P3 — Long-term avatar variety
 
-### AVATAR-02: Let players choose an animal body
+### AVATAR-02: Let players choose an animal body — **SHIPPED**
 
 **Concept:** Let each player select an animal instead of always playing as a
 humanoid. Animal bodies should still support the core fantasy: sampling colors,
 painting the body, moving into a hiding spot, and settling into a convincing
 pose.
+
+**Resolution:** The lobby now offers a rotating preview and replicated choice
+of Human, Cat, or Dog. All three are catalog-authored segmented rigs backed by
+one paint/ragdoll implementation. Each profile supplies its parts, joint graph,
+character collision, camera, nameplate, targeting, eye, weapon, and preview
+anchors. Selection lives in the network player registry, so peers agree on the
+body and quick replays preserve it. Contract tests cover every roster entry and
+a physics smoke test releases, paints, and restores both animal ragdolls. See
+`docs/AVATARS.md` for the extension checklist.
 
 **Suggested rollout:**
 

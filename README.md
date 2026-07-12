@@ -10,6 +10,8 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
   center-of-mass orbit around the body. Running and turning momentum carries
   into every released body segment. Bonus points for staying inside a seeker's
   line of sight without being noticed.
+- Pick a **Human, Cat, or Dog** in the lobby. The choice is replicated, and all
+  three bodies support the same painting, movement, shooting, and ragdoll loop.
 - **Seekers** wait blindfolded during the paint phase, then hunt with limited
   ammo before the timer runs out.
 

@@ -3,6 +3,25 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
+## Status: extensible animal avatars shipped (session 9, 2026-07-12)
+
+### Session 9: animal avatar roster (`AVATAR-02`)
+
+- Added a data-driven avatar contract and a launch roster of Human, Cat, and
+  Dog. Each profile owns its articulated part/joint layout plus collision,
+  camera, nameplate, targeting, eye, gun, and preview anchors.
+- The lobby now provides a rotating body preview and per-player selector. The
+  server validates and replicates the choice through the player registry, and
+  match setup/replays preserve it.
+- Painting, shooting hit shapes, movement, crouching, complete-body strokes,
+  ragdoll pose replication, and stand-up restoration remain shared code rather
+  than species branches.
+- Line-of-sight targets and cameras adapt to body height; ragdolled targeting
+  follows the moving center of mass.
+- Verified: 166 headless checks pass. Human ragdoll regression passes; cat and
+  dog physics smoke checks confirm stable settling, ragdoll painting, and pose
+  restoration; a full cat solo round completed PAINT → SEEK → RESULTS.
+
 ## Status: seek-phase hider slowdown shipped (session 8, 2026-07-12)
 
 ### Session 8: hider seek movement (`MOVE-02`)
@@ -188,13 +207,14 @@ eliminations, spectator mode, sounds, and HUD.
 
 ### File map
 - `autoload/app.gd` — settings, scene transitions, InputMap, CLI flags
-  (`--host --join --name --autostart N --fast-phases --quit-after S
+  (`--host --join --name --avatar ID --autostart N --fast-phases --quit-after S
   --screenshot path --screenshot-at S`)
 - `autoload/net.gd` — ENet host/join, player registry, ALL orchestration RPCs
 - `scripts/match_state.gd` — PURE rules (phases/roles/scores/ammo/wins)
 - `scripts/game_scene.gd` — server: MatchState+LoS+shots; all: spawn/FX/HUD
 - `scripts/player.gd` — move/camera/paint/eyedrop/shoot/sync/spectator
-- `scripts/paintable_body.gd` — subdivided-box humanoid, vertex splats
+- `scripts/avatar_catalog.gd` — human/cat/dog rig and gameplay-anchor profiles
+- `scripts/paintable_body.gd` — shared segmented avatar, vertex splats + ragdoll
 - `scripts/hud.gd`, `scripts/main_menu.gd`, `scripts/lobby.gd`,
   `scripts/pause_menu.gd` (Esc overlay; match keeps running)
 - `maps/map_basic.gd` — data-driven ZONES array; maps must expose

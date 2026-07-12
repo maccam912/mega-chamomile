@@ -1,13 +1,13 @@
 # Mega Chamomile — Design & Architecture
 
 A multiplayer hide-and-seek "paint yourself to blend in" game, inspired by
-MECCHA CHAMELEON (Steam, 2026). You stay a humanoid — no prop morphing — and
-camouflage by painting your own body with colors sampled from the world.
+MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
+— no prop morphing — and camouflage it with colors sampled from the world.
 
 ## Core loop
 
-1. **Lobby** — players join a hosted game, host picks seeker count and map,
-   then starts.
+1. **Lobby** — players join a hosted game, preview/select a body, and the host
+   picks seeker count and map, then starts.
 2. **PAINT phase (90 s)** — Hiders spawn in the map with a pure-white body.
    They sample colors from the world (eyedropper) and paint their own body,
    pick a hiding spot, and settle into position. Seekers wait in a sealed pen
@@ -28,9 +28,9 @@ camouflage by painting your own body with colors sampled from the world.
 
 ## The paint mechanic (MVP implementation)
 
-- The body is a blocky humanoid assembled from **subdivided BoxMeshes** with
-  separate upper/lower limbs, a pelvis, and constrained physics joints at the
-  elbows, knees, hips, shoulders, neck, and waist. Every segment supports
+- Each catalog-authored body is assembled from **subdivided BoxMeshes** with a
+  species-specific articulated part layout and constrained physics joint graph.
+  Every segment supports
   **vertex-color painting**:
   - Materials use `vertex_color_use_as_albedo = true` (works in Compatibility).
   - Painting = raycast from the third-person camera crosshair onto your own
@@ -79,7 +79,8 @@ autoload/Game.gd        # scene transitions + app state (current match settings)
 autoload/Net.gd         # ENet host/join + player registry + signals
 scripts/match_state.gd  # PURE match rules (testable headless)
 scripts/player.gd       # CharacterBody3D: move, camera, paint, shoot
-scripts/paintable_body.gd # builds subdivided-box humanoid, vertex splat API
+scripts/avatar_catalog.gd # data-authored human/cat/dog rigs + gameplay anchors
+scripts/paintable_body.gd # shared segmented avatar, vertex paint + ragdoll API
 scripts/game.gd         # wires Net + MatchState + spawner + HUD (thin shell)
 scenes/main_menu.tscn   # name, host, join
 scenes/lobby.tscn       # player list, seeker count, start
