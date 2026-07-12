@@ -149,7 +149,8 @@ func part_index(part_name: String) -> int:
 	return -1
 
 
-func set_ragdoll(active: bool, simulate: bool) -> void:
+func set_ragdoll(active: bool, simulate: bool, inherited_velocity: Vector3 = Vector3.ZERO,
+		inherited_angular_velocity: Vector3 = Vector3.ZERO) -> void:
 	if ragdolled == active:
 		return
 	ragdolled = active
@@ -165,11 +166,22 @@ func set_ragdoll(active: bool, simulate: bool) -> void:
 			rb.collision_mask = 1 if simulate else 0
 			rb.freeze = not simulate
 			rb.sleeping = false
+			if simulate:
+				# A turning rigid character gives each point a different tangential
+				# velocity: v(point) = v(root) + angular_velocity × radius.
+				var radius: Vector3 = world_pose.origin - global_position
+				rb.linear_velocity = inherited_velocity \
+						+ inherited_angular_velocity.cross(radius)
+				rb.angular_velocity = inherited_angular_velocity
 		if simulate:
 			var torso := part_bodies[part_index("Torso")]
-			# A small forward nudge ensures the released upright rig actually
-			# settles into a lying pose instead of balancing on both feet.
-			torso.apply_central_impulse(-global_transform.basis.z * 0.7 + Vector3.UP * 0.08)
+			# Tip toward current travel. At rest, retain the small forward nudge
+			# that prevents the released upright rig balancing on both feet.
+			var horizontal_motion := Vector3(inherited_velocity.x, 0, inherited_velocity.z)
+			var fall_direction := (
+					horizontal_motion.normalized() if horizontal_motion.length_squared() > 0.01
+					else -global_transform.basis.z)
+			torso.apply_central_impulse(fall_direction * 0.7 + Vector3.UP * 0.08)
 	else:
 		for i in part_bodies.size():
 			var rb := part_bodies[i]
@@ -186,6 +198,17 @@ func capture_pose() -> Array[Transform3D]:
 	for rb in part_bodies:
 		pose.append(rb.global_transform if is_inside_tree() else rb.transform)
 	return pose
+
+
+func center_of_mass_global() -> Vector3:
+	if part_bodies.is_empty():
+		return global_position
+	var weighted_position := Vector3.ZERO
+	var total_mass := 0.0
+	for rb in part_bodies:
+		weighted_position += rb.global_position * rb.mass
+		total_mass += rb.mass
+	return weighted_position / maxf(total_mass, 0.001)
 
 
 func set_remote_pose(pose: Array) -> void:

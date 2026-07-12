@@ -93,6 +93,10 @@ docs/DESIGN.md, PROGRESS.md
 - WASD move, Space jump, mouse orbit camera (captured), Esc release mouse.
 - Hider: **LMB paint**, **RMB (hold) eyedrop** world color at crosshair,
   scroll = brush size, **R / Ragdoll button** = lie down or stand back up.
+  Ragdoll uses WASD/Space/C free-flight; entering paint mode temporarily
+  returns the camera to an orbit around the body's live center of mass.
+  Entering ragdoll preserves the player's linear and angular point velocities
+  across all articulated body segments.
   Palette bar shows current color.
 - Seeker: **LMB shoot** (cooldown 0.8 s, ammo = 3× hider count).
 

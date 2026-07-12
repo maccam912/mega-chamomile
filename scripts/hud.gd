@@ -233,7 +233,7 @@ func setup(role: int) -> void:
 	else:
 		_role_label.text = "HIDER"
 		_role_label.add_theme_color_override("font_color", Color("8fd18a"))
-		_hint_label.text = "press F, then paint yourself to match the world.\nR ragdoll, C crouch, Esc menu."
+		_hint_label.text = "press F, then paint yourself to match the world.\nR ragdoll, WASD fly cam, Esc menu."
 	_ragdoll_button.visible = role == MatchState.Role.HIDER
 
 

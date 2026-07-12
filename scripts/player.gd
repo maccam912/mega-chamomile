@@ -13,6 +13,9 @@ const PAINT_MIN_STEP := 0.35  ## of brush radius: cursor travel before restampin
 const PAINT_MAX_GAP := 0.35   ## m: bigger jumps between samples aren't connected
 const PAINT_RANGE := 4.0
 const SHOOT_RANGE := 60.0
+const NORMAL_CAMERA_PIVOT := Vector3(0, 1.45, 0)
+const ORBIT_SPRING_LENGTH := 2.6
+const CAMERA_LOCAL_OFFSET := Vector3(0, 0, 0.1)
 
 var peer_id := 1
 var display_name := "?"
@@ -45,6 +48,7 @@ var _footstep_timer := 0.0
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _target_crouch := false
+var _yaw_rate := 0.0  ## most recent local turn speed, inherited by ragdoll pieces
 var look_dir := Vector3.FORWARD  ## synced; server uses it for LoS cones
 
 var _snd_paint: AudioStreamPlayer3D
@@ -109,16 +113,16 @@ func _ready() -> void:
 
 	if is_local():
 		_rig = Node3D.new()
-		_rig.position = Vector3(0, 1.45, 0)
+		_rig.position = NORMAL_CAMERA_PIVOT
 		add_child(_rig)
 		_spring = SpringArm3D.new()
-		_spring.spring_length = 2.6
+		_spring.spring_length = ORBIT_SPRING_LENGTH
 		_spring.position = Vector3(0.35, 0, 0)  # slight over-shoulder offset
 		_spring.collision_mask = 1
 		_spring.add_excluded_object(get_rid())
 		_rig.add_child(_spring)
 		_camera = Camera3D.new()
-		_camera.position = Vector3(0, 0, 0.1)
+		_camera.position = CAMERA_LOCAL_OFFSET
 		_spring.add_child(_camera)
 		_camera.make_current()
 		_snd_eyedrop = AudioStreamPlayer.new()
@@ -205,6 +209,11 @@ func set_paint_mode(on: bool) -> void:
 	if paint_mode == on:
 		return
 	paint_mode = on
+	if ragdolled and is_local():
+		if paint_mode:
+			_enter_ragdoll_orbit_camera()
+		else:
+			_enter_ragdoll_fly_camera()
 	_update_mouse_mode()
 
 
@@ -229,7 +238,15 @@ func _update_mouse_mode() -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_local():
+		if ragdolled and paint_mode:
+			# The physics rig can keep sliding after it lands. Track its current
+			# mass center so paint-mode orbit never drifts away from the body.
+			_rig.global_position = body.center_of_mass_global()
+		var yaw_before := rotation.y
 		_local_move(delta)
+		if not ragdolled:
+			_yaw_rate = clampf(wrapf(rotation.y - yaw_before, -PI, PI) / maxf(delta, 0.001),
+					-12.0, 12.0)
 		_sync_timer += delta
 		if _sync_timer >= SYNC_INTERVAL:
 			_sync_timer = 0.0
@@ -276,6 +293,8 @@ func _local_move(delta: float) -> void:
 		return
 	if ragdolled:
 		velocity = Vector3.ZERO
+		if not paint_mode and not ui_blocked:
+			_ragdoll_fly_camera(delta)
 		return
 	if frozen or ui_blocked:
 		# No input, but keep gravity so opening the menu mid-jump can't hover.
@@ -324,6 +343,19 @@ func _fly_move(delta: float) -> void:
 	dir.y += up_down
 	velocity = dir.normalized() * FLY_SPEED if dir.length() > 0.1 else Vector3.ZERO
 	move_and_slide()
+
+
+func _ragdoll_fly_camera(delta: float) -> void:
+	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var up_down := 0.0
+	if Input.is_action_pressed("jump"):
+		up_down += 1.0
+	if Input.is_action_pressed("crouch"):
+		up_down -= 1.0
+	var dir := _camera.global_transform.basis * Vector3(input_dir.x, 0, input_dir.y)
+	dir += Vector3.UP * up_down
+	if dir.length_squared() > 0.01:
+		_rig.global_position += dir.normalized() * FLY_SPEED * delta
 
 
 func _local_footsteps(delta: float) -> void:
@@ -379,12 +411,48 @@ func toggle_ragdoll() -> void:
 func set_ragdoll(active: bool) -> void:
 	if ragdolled == active or body == null:
 		return
+	# Capture motion before the CharacterBody stops. Every released segment gets
+	# the same translational velocity plus the point velocity created by turning.
+	var inherited_velocity := velocity if active and is_local() else Vector3.ZERO
+	var inherited_angular_velocity := (
+			Vector3.UP * _yaw_rate if active and is_local() else Vector3.ZERO)
 	ragdolled = active
 	body.scale = Vector3.ONE
 	velocity = Vector3.ZERO
 	if _collision != null:
 		_collision.set_deferred("disabled", active)
-	body.set_ragdoll(active, is_local())
+	body.set_ragdoll(active, is_local(), inherited_velocity, inherited_angular_velocity)
+	if is_local():
+		if active:
+			if paint_mode:
+				_enter_ragdoll_orbit_camera()
+			else:
+				_enter_ragdoll_fly_camera()
+		else:
+			_restore_follow_camera()
+
+
+func _enter_ragdoll_fly_camera() -> void:
+	# Collapse the spring arm without moving the view. From here the camera rig
+	# itself is translated by WASD/Space/C, independently of the player root.
+	var view_transform := _camera.global_transform
+	_spring.spring_length = 0.0
+	# SpringArm moves direct children to its hit distance. Reset its child to
+	# the zero-length offset now so our preserved-view calculation also matches
+	# the transform it will have on the next physics tick.
+	_camera.position = CAMERA_LOCAL_OFFSET
+	var camera_offset := _spring.position + _spring.transform.basis * _camera.position
+	_rig.global_position = view_transform.origin - view_transform.basis * camera_offset
+
+
+func _enter_ragdoll_orbit_camera() -> void:
+	_spring.spring_length = ORBIT_SPRING_LENGTH
+	_rig.global_position = body.center_of_mass_global()
+
+
+func _restore_follow_camera() -> void:
+	_spring.spring_length = ORBIT_SPRING_LENGTH
+	_rig.position = NORMAL_CAMERA_PIVOT
 
 
 ## Sample the brush under a screen point (cursor or crosshair) every frame
@@ -421,6 +489,7 @@ func brush_cursor_px(screen_point: Vector2) -> float:
 	var hit := _screen_ray(screen_point, PAINT_RANGE, PaintableBody.PAINT_LAYER, [])
 	var ref: Vector3 = (
 		Vector3(hit["position"]) if not hit.is_empty()
+		else body.center_of_mass_global() if ragdolled
 		else body.global_transform * Vector3(0, 1.0, 0)
 	)
 	var right: Vector3 = _camera.global_transform.basis.x
