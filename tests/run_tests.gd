@@ -9,6 +9,8 @@ const PaintableBodyScript := preload("res://scripts/paintable_body.gd")
 const AvatarCatalogScript := preload("res://scripts/avatar_catalog.gd")
 const AppScript := preload("res://autoload/app.gd")
 const LANAddressScript := preload("res://scripts/lan_address.gd")
+const UIThemeScript := preload("res://scripts/ui_theme.gd")
+const PaintBackdropScript := preload("res://scripts/paint_backdrop.gd")
 
 var _failures := 0
 var _checks := 0
@@ -33,6 +35,7 @@ func _initialize() -> void:
 	test_paint_stroke()
 	test_articulated_ragdoll()
 	test_results_pose_preservation()
+	test_ui_foundation()
 	test_hud_passes_mouse_through()
 	test_travel_facing()
 	test_seek_hider_slowdown()
@@ -596,6 +599,29 @@ func test_results_pose_preservation() -> void:
 	check(all_frozen, "survivor ragdoll no longer simulates during inspection")
 	check(all_noncolliding, "inspection movement cannot disturb survivor parts")
 	body.free()
+
+
+func test_ui_foundation() -> void:
+	print("shared UI foundation:")
+	var shared_theme := UIThemeScript.shared()
+	check(shared_theme.default_font_size == 16,
+			"shared theme defines a readable logical base font")
+	check(shared_theme.get_stylebox("normal", "PrimaryButton") != null,
+			"shared theme exposes a consistent primary action style")
+	check(ProjectSettings.get_setting("display/window/size/viewport_width") == 1280
+			and ProjectSettings.get_setting("display/window/size/viewport_height") == 720,
+			"UI renders from the 1280x720 logical canvas")
+	check(ProjectSettings.get_setting("display/window/stretch/mode") == "canvas_items"
+			and ProjectSettings.get_setting("display/window/stretch/aspect") == "expand",
+			"logical UI scales and expands without distorting its aspect")
+
+	var backdrop: Control = PaintBackdropScript.new()
+	backdrop.set_reduce_motion(true)
+	check(backdrop.reduce_motion and not backdrop.is_processing(),
+			"menu motion has an accessible opt-out")
+	backdrop.set_reduce_motion(false)
+	check(backdrop.is_processing(), "menu backdrop can restore restrained motion")
+	backdrop.free()
 
 
 func test_hud_passes_mouse_through() -> void:

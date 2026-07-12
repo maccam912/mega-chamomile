@@ -2,6 +2,8 @@ extends CanvasLayer
 ## Escape menu. The match keeps running (it's multiplayer — nothing actually
 ## pauses); this just frees the mouse and offers resume / leave / quit.
 
+const UITheme := preload("res://scripts/ui_theme.gd")
+
 signal opened
 signal resumed
 
@@ -18,6 +20,7 @@ func _ready() -> void:
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.theme = UITheme.shared()
 	add_child(center)
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()

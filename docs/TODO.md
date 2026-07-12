@@ -26,8 +26,12 @@ requests. It is planning documentation; items are unimplemented unless marked
   implemented. Character scale remains deferred pending physics playtesting.
 - `SCORE-01` **SHIPPED**: survival, visible-risk, find, and end-bonus scoring
   are server-authoritative, shown separately in results, and host-tuneable.
-- `UI-01` foundation: the project now uses a 1280×720 logical canvas-items
-  scaling policy with high-DPI support and expandable aspect handling.
+- `UI-01` implementation complete, Windows hardware QA pending: every screen
+  now shares one theme and 1280×720 logical canvas policy, the lobby scrolls
+  safely at short heights, and 1280×720 plus 1920×1080 render reviews pass.
+- `UI-02` **SHIPPED**: the main menu has a paint-led responsive layout, strong
+  host/join hierarchy, animated code-drawn backdrop, styled LAN games, complete
+  credits, and a persisted Reduce Motion control.
 - `HIDE-01` **SHIPPED**: hiders can confirm or undo readiness during PAINT;
   everyone sees an aggregate count, and the host can release seekers early
   once every active hider is ready.
@@ -67,7 +71,7 @@ after investigation, especially for bugs.
 | --- | --- | --- | --- | --- |
 | `BRAND-01` | **SHIPPED** | High | Standalone | Product, package, export, release, and launcher names now use Paint-n-Seek. |
 | `BUG-01` | **SHIPPED** | High | Movement regression test | The movement yaw included an extra half-turn, making the model face opposite its travel direction. |
-| `UI-01` | S–M | High | `UI-02`, `SETTINGS-01` | Central display scaling and theme sizing should address most Retina/Windows inconsistency, followed by a screen audit. |
+| `UI-01` | **IMPLEMENTED — Windows QA pending** | High | `UI-02`, `SETTINGS-01` | Shared theme, logical scaling, safe-area layouts, and scroll containment are complete; capture the matching Windows hardware screenshots at the next playtest. |
 | `REVEAL-01` | **SHIPPED** | Medium | `ROUND-01`, results presentation | Results preserve poses, reveal survivors, and support scene inspection. |
 | `SCORE-01` | **SHIPPED** | High | `SCORE-02`, `SETTINGS-01` | Results break down every component and the host can tune all scoring values. |
 | `HIDE-01` | **SHIPPED** | High | `ROUND-01`, `CAMERA-01` | Server-authoritative readiness gates an explicit host early-start action. |
@@ -76,7 +80,7 @@ after investigation, especially for bugs.
 | `PAINT-01` | **SHIPPED** | High | Paint regression tests | Camera-ray-aligned cylindrical strokes paint front and hidden back surfaces while retaining the brush footprint. |
 | `NET-01` | **SHIPPED** | High | Lobby and main-menu UI | UDP discovery advertises existing ENet lobbies and populates a live join list. |
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
-| `UI-02` | M | High | `UI-01`, `BRAND-01` | A focused main-menu layout, styling, motion, and audio pass without changing game rules. |
+| `UI-02` | **SHIPPED** | High | `UI-01`, `BRAND-01` | Paint-led menu layout, styling, restrained motion, reduced-motion persistence, and interaction feedback are implemented. |
 | `SCORE-02` | **SHIPPED** | High | `ROUND-01`, `ROLE-01` | Session totals use live peer identity and survive round scene reloads. |
 | `MOVE-01` | **SHIPPED** | High | Movement regression tests | Continuous climbing requires wall contact; hold-to-confirm unstuck has a cooldown and is disabled while frozen. |
 | `MOVE-03` | S–M | High | `MOVE-01`, Hallwyl map collision | Add map-specific perimeter recovery plus authoritative position validation so near-map escapes return players safely instead of leaving them outside. |
@@ -97,8 +101,8 @@ These are good candidates when a small, independent improvement is wanted:
    consistently uses Paint-n-Seek.
 2. **SHIPPED** — `BUG-01`: characters now face their travel direction instead
    of walking backward.
-3. Establish consistent UI scaling for `UI-01`, then audit the existing screens
-   at representative Retina and Windows resolutions.
+3. **IMPLEMENTED** — `UI-01`: consistent shared theme/scaling and scroll-safe
+   screen layouts; matching Windows hardware screenshots remain QA-only.
 4. **SHIPPED** — `REVEAL-01`: final poses are preserved and survivors can be
    inspected from the results screen.
 5. **SHIPPED** — hiding time and seeking time are exposed in the lobby
@@ -830,7 +834,7 @@ eliminating hiders or ending after one sweep.
 
 ## P1/P2 — UI consistency and presentation
 
-### UI-01 (P1): Make UI scale consistently on Retina and Windows displays
+### UI-01 (P1): Make UI scale consistently on Retina and Windows displays — **IMPLEMENTED; WINDOWS QA PENDING**
 
 **Problem:** Fonts and controls appear much smaller on a Retina Mac display
 than when the same build is tested on a Windows machine.
@@ -864,7 +868,7 @@ option only if automatic scaling cannot cover the tested displays reliably.
 - Capture comparison screenshots using the same screens and game state so the
   cross-platform result can be reviewed side by side.
 
-### UI-02 (P2): Give the main menu more pizzazz
+### UI-02 (P2): Give the main menu more pizzazz — **SHIPPED**
 
 **Requested behavior:** Spruce up at least the main menu so the game immediately
 communicates its playful paint-and-hide identity instead of feeling like a plain

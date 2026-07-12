@@ -2,6 +2,8 @@ extends CanvasLayer
 ## In-match HUD, built in code. The game scene drives it via plain method
 ## calls; it keeps its own display countdown between phase broadcasts.
 
+const UITheme := preload("res://scripts/ui_theme.gd")
+
 const MOVE_HINT := "F paint mode    wheel brush size"
 const PAINT_HINT := "LMB paint yourself    RMB sample color    MMB drag orbit    F done"
 
@@ -55,6 +57,7 @@ func _ready() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UITheme.shared()
 	add_child(root)
 
 	# Blindfold sits under the other HUD elements.
@@ -221,6 +224,7 @@ func _ready() -> void:
 	_hidden_controls.add_child(_hidden_toggle)
 	_start_seek_button = Button.new()
 	_start_seek_button.text = "ENTER  START SEEKING NOW"
+	_start_seek_button.theme_type_variation = "PrimaryButton"
 	_start_seek_button.custom_minimum_size = Vector2(260, 42)
 	_start_seek_button.disabled = true
 	_start_seek_button.set_meta("interactive_hud", true)
@@ -474,6 +478,7 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 	if is_host:
 		_replay_start_button = Button.new()
 		_replay_start_button.text = "START NEXT ROUND"
+		_replay_start_button.theme_type_variation = "PrimaryButton"
 		_replay_start_button.custom_minimum_size = Vector2(0, 48)
 		_replay_start_button.disabled = true
 		_replay_start_button.set_meta("interactive_hud", true)

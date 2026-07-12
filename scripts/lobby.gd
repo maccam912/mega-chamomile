@@ -2,6 +2,7 @@ extends Control
 ## Lobby: shows connected players; the host picks seeker count and starts.
 
 const LANAddress := preload("res://scripts/lan_address.gd")
+const UITheme := preload("res://scripts/ui_theme.gd")
 
 var _player_list: VBoxContainer
 var _start_btn: Button
@@ -24,24 +25,42 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
+	theme = UITheme.shared()
 	var bg := ColorRect.new()
-	bg.color = Color("232733")
+	bg.color = UITheme.INK
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
+	# The complete host settings list is taller than 720p. Keep it centered when
+	# space allows and scroll it within a logical safe area when it does not.
+	var safe_area := MarginContainer.new()
+	safe_area.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
+		safe_area.add_theme_constant_override(side, 24)
+	add_child(safe_area)
+	var scroll := ScrollContainer.new()
+	scroll.name = "LobbyScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.follow_focus = true
+	safe_area.add_child(scroll)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center.custom_minimum_size = Vector2(560, 0)
+	scroll.add_child(center)
 
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(460, 0)
+	box.custom_minimum_size = Vector2(520, 0)
 	box.add_theme_constant_override("separation", 12)
 	center.add_child(box)
 
 	var title := Label.new()
 	title.text = "LOBBY"
 	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", Color("f5f0e6"))
+	title.add_theme_color_override("font_color", UITheme.TEXT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 
@@ -55,16 +74,11 @@ func _build_ui() -> void:
 	else:
 		ip_hint.text = "Connected to host"
 	ip_hint.add_theme_font_size_override("font_size", 13)
-	ip_hint.add_theme_color_override("font_color", Color("8a92a6"))
+	ip_hint.add_theme_color_override("font_color", UITheme.MUTED)
 	ip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(ip_hint)
 
 	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("2c3140")
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(14)
-	panel.add_theme_stylebox_override("panel", style)
 	box.add_child(panel)
 
 	_player_list = VBoxContainer.new()
@@ -136,6 +150,7 @@ func _build_ui() -> void:
 
 		_start_btn = Button.new()
 		_start_btn.text = "START MATCH"
+		_start_btn.theme_type_variation = "PrimaryButton"
 		_start_btn.custom_minimum_size = Vector2(0, 48)
 		_start_btn.pressed.connect(_on_start_pressed)
 		box.add_child(_start_btn)
@@ -158,6 +173,7 @@ func _build_ui() -> void:
 
 	var leave_btn := Button.new()
 	leave_btn.text = "LEAVE"
+	leave_btn.theme_type_variation = "QuietButton"
 	leave_btn.custom_minimum_size = Vector2(0, 40)
 	leave_btn.pressed.connect(_on_leave_pressed)
 	box.add_child(leave_btn)

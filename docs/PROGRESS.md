@@ -3,7 +3,31 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: backlog expansion shipped (session 10, 2026-07-12)
+## Status: shared UI foundation and main-menu polish implemented (session 11, 2026-07-12)
+
+### Session 11: interface consistency and presentation (`UI-01`, `UI-02`)
+
+- Added one shared theme for menus, lobby, pause controls, interactive HUD
+  actions, and results. It defines readable logical font sizing, consistent
+  spacing, panels, fields, focus states, disabled states, and primary/quiet
+  button treatments on top of the existing 1280×720 high-DPI canvas policy.
+- Made the full host lobby scroll within a 24px safe area, so its settings no
+  longer clip below a 720p window and keyboard focus follows the scroll.
+- Rebuilt the main menu around a clear paint/blend/vanish pitch and a focused
+  host/join panel. LAN discovery and manual IP joining remain fully available,
+  while the title, premise, credits, status, and controls have a stronger
+  reusable visual hierarchy.
+- Added a lightweight code-drawn paint backdrop with restrained drift plus a
+  persisted Reduce Motion control. No large new bitmap or 3D scene is loaded by
+  the menu.
+- Added Enter-to-host/join behavior and visible hover, pressed, focus, disabled,
+  and connection-busy states.
+- Verified: 209 headless checks pass; the editor load is clean; live menu
+  screenshots at 1280×720 and 1920×1080 scale without overlap or clipping; a
+  live 1280×720 host lobby confirms scrolling and safe-area containment.
+  Matching Windows hardware screenshots remain the final `UI-01` QA step.
+
+## Previous status: backlog expansion shipped (session 10, 2026-07-12)
 
 ### Session 10: rounds, roles, discovery, reveal, settings, and branding
 

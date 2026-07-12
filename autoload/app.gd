@@ -2,6 +2,7 @@ extends Node
 ## App-level singleton: settings, scene transitions, input map, CLI args, UI sounds.
 
 const PORT := 24565
+const PREFERENCES_PATH := "user://preferences.cfg"
 const GAME_SCENE := "res://scenes/game.tscn"
 const LOBBY_SCENE := "res://scenes/lobby.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -46,6 +47,7 @@ var last_winner: int = 0
 var in_match := false
 var selected_avatar := AvatarCatalog.DEFAULT_ID
 var selected_role_preference := "none"
+var reduce_motion := false
 ## Stable for this app process so reconnecting to the same lobby retains role
 ## history without conflating two players who chose the same display name.
 var lobby_identity := "%d-%d" % [Time.get_ticks_usec(), randi()]
@@ -56,6 +58,7 @@ var _ui_player: AudioStreamPlayer
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_load_preferences()
 	_setup_input_map()
 	_parse_cli()
 	if cli.has("avatar"):
@@ -100,6 +103,21 @@ func to_main_menu(msg := "") -> void:
 
 func play_ui_click() -> void:
 	_ui_player.play()
+
+
+func set_reduce_motion(reduced: bool) -> void:
+	reduce_motion = reduced
+	var config := ConfigFile.new()
+	config.set_value("accessibility", "reduce_motion", reduce_motion)
+	var err := config.save(PREFERENCES_PATH)
+	if err != OK:
+		push_warning("Could not save interface preferences: %s" % error_string(err))
+
+
+func _load_preferences() -> void:
+	var config := ConfigFile.new()
+	if config.load(PREFERENCES_PATH) == OK:
+		reduce_motion = bool(config.get_value("accessibility", "reduce_motion", false))
 
 
 func select_map(map_id: String) -> void:
