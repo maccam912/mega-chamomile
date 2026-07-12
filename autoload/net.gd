@@ -21,19 +21,32 @@ signal replay_readiness_changed(ready_ids: Array, player_count: int)
 signal hiding_readiness_changed(hidden_count: int, hider_count: int, my_hidden: bool)
 signal hidden_ready_requested(peer_id: int, hidden: bool)  ## server only
 signal start_seeking_requested  ## server only
+signal settings_changed(settings: Dictionary)
+signal lan_games_changed(games: Array)
 
 const SessionStateScript := preload("res://scripts/session_state.gd")
+const DISCOVERY_PORT := 24566
+const DISCOVERY_REQUEST := "PAINT_N_SEEK_DISCOVER_V1"
+const DISCOVERY_PROTOCOL := 1
+const DISCOVERY_PROBE_INTERVAL := 1.0
+const DISCOVERY_STALE_SECONDS := 3.5
 
-var players := {}  ## peer_id -> {"name": String, "avatar": String}
-var my_name := "Chamomile"
+var players := {}  ## peer_id -> {"name": String, "avatar": String, "preference": String}
+var my_name := "Painter"
 
 var _ready_peers := {}
 var _match_ready_peers := {}
 var session: RefCounted = SessionStateScript.new()
 var _accepting_replay_ready := false
+var lobby_settings := {}
+var _lan_server: UDPServer
+var _lan_client: PacketPeerUDP
+var _lan_games := {}  ## address -> advertised row + last_seen
+var _lan_probe_left := 0.0
 
 
 func _ready() -> void:
+	set_process(true)
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_ok)
@@ -46,17 +59,22 @@ func is_server() -> bool:
 
 
 func host_game() -> Error:
+	stop_lan_discovery()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(App.PORT, 16)
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
-	players = {1: {"name": my_name, "avatar": App.selected_avatar}}
-	session.reset([1])
+	players = {1: {"name": my_name, "avatar": App.selected_avatar,
+			"preference": App.selected_role_preference}}
+	lobby_settings = App.settings.duplicate(true)
+	session.reset([])
+	session.add_player(1, App.lobby_identity)
 	_accepting_replay_ready = false
 	App.last_scores.clear()
 	App.last_winner = 0
 	players_changed.emit()
+	_start_lan_advertising()
 	return OK
 
 
@@ -66,6 +84,7 @@ func join_game(ip: String) -> Error:
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
+	lobby_settings.clear()
 	session.reset([])
 	_accepting_replay_ready = false
 	App.last_scores.clear()
@@ -74,16 +93,120 @@ func join_game(ip: String) -> Error:
 
 
 func leave() -> void:
+	_stop_lan_advertising()
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	players.clear()
+	lobby_settings.clear()
 	_ready_peers.clear()
 	_match_ready_peers.clear()
 	session.reset([])
 	_accepting_replay_ready = false
 	App.last_scores.clear()
 	App.last_winner = 0
+
+
+func _process(delta: float) -> void:
+	_poll_lan_advertising()
+	_poll_lan_discovery(delta)
+
+
+func _start_lan_advertising() -> void:
+	_stop_lan_advertising()
+	_lan_server = UDPServer.new()
+	var err := _lan_server.listen(DISCOVERY_PORT)
+	if err != OK:
+		print("[net] LAN discovery advertising unavailable: ", error_string(err))
+		_lan_server = null
+
+
+func _stop_lan_advertising() -> void:
+	if _lan_server != null:
+		_lan_server.stop()
+		_lan_server = null
+
+
+func _poll_lan_advertising() -> void:
+	if _lan_server == null or App.in_match:
+		return
+	_lan_server.poll()
+	while _lan_server.is_connection_available():
+		var peer := _lan_server.take_connection()
+		if peer == null or peer.get_available_packet_count() == 0:
+			continue
+		var request := peer.get_packet().get_string_from_utf8()
+		if request != DISCOVERY_REQUEST:
+			continue
+		var payload := {
+			"protocol": DISCOVERY_PROTOCOL,
+			"host": my_name,
+			"players": players.size(),
+			"capacity": 16,
+			"port": App.PORT,
+		}
+		peer.put_packet(JSON.stringify(payload).to_utf8_buffer())
+
+
+func start_lan_discovery() -> void:
+	stop_lan_discovery()
+	_lan_client = PacketPeerUDP.new()
+	var err := _lan_client.bind(0)
+	if err != OK:
+		print("[net] LAN discovery unavailable: ", error_string(err))
+		_lan_client = null
+		return
+	_lan_client.set_broadcast_enabled(true)
+	_lan_games.clear()
+	_lan_probe_left = 0.0
+	lan_games_changed.emit([])
+
+
+func stop_lan_discovery() -> void:
+	if _lan_client != null:
+		_lan_client.close()
+		_lan_client = null
+	_lan_games.clear()
+
+
+func _poll_lan_discovery(delta: float) -> void:
+	if _lan_client == null:
+		return
+	_lan_probe_left -= delta
+	if _lan_probe_left <= 0.0:
+		_lan_probe_left = DISCOVERY_PROBE_INTERVAL
+		_lan_client.set_dest_address("255.255.255.255", DISCOVERY_PORT)
+		_lan_client.put_packet(DISCOVERY_REQUEST.to_utf8_buffer())
+		# Also supports two-instance testing on one computer; LAN hosts still
+		# arrive through the broadcast above.
+		_lan_client.set_dest_address("127.0.0.1", DISCOVERY_PORT)
+		_lan_client.put_packet(DISCOVERY_REQUEST.to_utf8_buffer())
+	var changed := false
+	while _lan_client.get_available_packet_count() > 0:
+		var bytes := _lan_client.get_packet()
+		var address := _lan_client.get_packet_ip()
+		var parsed = JSON.parse_string(bytes.get_string_from_utf8())
+		if not parsed is Dictionary or not parsed.has("protocol"):
+			continue
+		var row: Dictionary = parsed
+		row["address"] = address
+		row["compatible"] = int(row["protocol"]) == DISCOVERY_PROTOCOL
+		row["last_seen"] = Time.get_ticks_msec() / 1000.0
+		var is_new := not _lan_games.has(address)
+		_lan_games[address] = row
+		if is_new:
+			print("[net] discovered LAN game %s at %s" % [row.get("host", "?"), address])
+		changed = true
+	var now := Time.get_ticks_msec() / 1000.0
+	for address: String in _lan_games.keys():
+		if now - float(_lan_games[address]["last_seen"]) > DISCOVERY_STALE_SECONDS:
+			_lan_games.erase(address)
+			changed = true
+	if changed:
+		var rows := _lan_games.values()
+		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a.get("host", "")) < str(b.get("host", "")))
+		lan_games_changed.emit(rows)
 
 
 # --- connection lifecycle -------------------------------------------------
@@ -110,7 +233,8 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 func _on_connected_ok() -> void:
-	rpc_id(1, &"_register_player", my_name, App.selected_avatar)
+	rpc_id(1, &"_register_player", my_name, App.selected_avatar,
+			App.selected_role_preference, App.lobby_identity)
 	joined_ok.emit()
 
 
@@ -127,15 +251,18 @@ func _on_server_disconnected() -> void:
 # --- player registry ------------------------------------------------------
 
 @rpc("any_peer", "call_remote", "reliable")
-func _register_player(pname: String, avatar_id: String) -> void:
+func _register_player(pname: String, avatar_id: String, preference: String,
+		lobby_identity: String) -> void:
 	if not is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
 	players[id] = {
 		"name": pname.substr(0, 20),
 		"avatar": AvatarCatalog.normalize(avatar_id),
+		"preference": _normalize_preference(preference),
 	}
-	session.add_player(id)
+	rpc_id(id, &"_sync_settings", App.settings)
+	session.add_player(id, lobby_identity.substr(0, 80))
 	rpc(&"_sync_players", players)
 	players_changed.emit()
 
@@ -169,6 +296,56 @@ func _set_player_avatar(id: int, avatar_id: String) -> void:
 	players[id]["avatar"] = AvatarCatalog.normalize(avatar_id)
 	rpc(&"_sync_players", players)
 	players_changed.emit()
+
+
+func request_role_preference(preference: String) -> void:
+	var normalized := _normalize_preference(preference)
+	App.select_role_preference(normalized)
+	if is_server():
+		_set_role_preference(1, normalized)
+	else:
+		rpc_id(1, &"_request_role_preference", normalized)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_role_preference(preference: String) -> void:
+	if is_server():
+		_set_role_preference(multiplayer.get_remote_sender_id(), preference)
+
+
+func _set_role_preference(id: int, preference: String) -> void:
+	if App.in_match or not players.has(id):
+		return
+	players[id]["preference"] = _normalize_preference(preference)
+	rpc(&"_sync_players", players)
+	players_changed.emit()
+
+
+func _normalize_preference(preference: String) -> String:
+	return preference if preference in ["none", "seeker", "hider"] else "none"
+
+
+func assign_session_roles(seeker_count: int) -> Array:
+	var preferences := {}
+	for id: int in players:
+		preferences[id] = _normalize_preference(str(players[id].get("preference", "none")))
+	return session.assign_roles(preferences, seeker_count)
+
+
+func update_lobby_settings() -> void:
+	if not is_server() or App.in_match:
+		return
+	App.apply_match_settings(App.settings)
+	lobby_settings = App.settings.duplicate(true)
+	rpc(&"_sync_settings", lobby_settings)
+	settings_changed.emit(lobby_settings)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_settings(snapshot: Dictionary) -> void:
+	App.apply_match_settings(snapshot)
+	lobby_settings = App.settings.duplicate(true)
+	settings_changed.emit(lobby_settings)
 
 
 # --- match orchestration (host -> everyone) --------------------------------
@@ -219,10 +396,19 @@ func request_replay_start() -> bool:
 
 
 func _begin_game_load() -> void:
+	_stop_lan_advertising()
+	var snapshot: Dictionary = App.settings.duplicate(true)
+	var fast_phases := App.cli.has("fast-phases")
+	if fast_phases:
+		snapshot["_fast_phases"] = true
+	App.apply_match_settings(snapshot)
+	snapshot = App.settings.duplicate(true)
+	if fast_phases:
+		snapshot["_fast_phases"] = true
 	_accepting_replay_ready = false
 	_ready_peers.clear()
 	_match_ready_peers.clear()
-	rpc(&"_load_game", str(App.settings["map_id"]))
+	rpc(&"_load_game", snapshot)
 
 
 func _broadcast_replay_readiness() -> void:
@@ -272,8 +458,8 @@ func request_start_seeking() -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _load_game(map_id: String) -> void:
-	App.select_map(map_id)
+func _load_game(settings_snapshot: Dictionary) -> void:
+	App.apply_match_settings(settings_snapshot)
 	App.in_match = true
 	App.status_message = ""
 	App.goto_scene(App.GAME_SCENE)

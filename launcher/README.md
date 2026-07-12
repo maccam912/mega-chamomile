@@ -1,4 +1,4 @@
-# Mega Chamomile launcher
+# Paint-n-Seek launcher
 
 This directory contains the dependency-free Go launcher published alongside
 each game release. On every launch it:
@@ -12,9 +12,9 @@ each game release. On every launch it:
 
 Installed versions and `launcher.log` are stored under:
 
-- Windows: `%AppData%\\MegaChamomile`
-- macOS: `~/Library/Application Support/MegaChamomile`
-- Linux: `${XDG_CONFIG_HOME:-~/.config}/MegaChamomile`
+- Windows: `%AppData%\\PaintNSeek`
+- macOS: `~/Library/Application Support/PaintNSeek`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/PaintNSeek`
 
 The release workflow injects its own `owner/repository` value at build time, so
 forks automatically update from their own releases. A local build defaults to

@@ -9,14 +9,17 @@ var _seeker_spin: SpinBox
 var _map_option: OptionButton
 var _hint: Label
 var _avatar_option: OptionButton
+var _role_option: OptionButton
 var _preview_root: Node3D
 var _preview_camera: Camera3D
 var _preview_body: PaintableBody
+var _settings_summary: Label
 
 
 func _ready() -> void:
 	_build_ui()
 	Net.players_changed.connect(_refresh)
+	Net.settings_changed.connect(_refresh_settings_summary)
 	_refresh()
 
 
@@ -70,12 +73,38 @@ func _build_ui() -> void:
 	panel.add_child(_player_list)
 
 	_build_avatar_picker(box)
+	_build_role_preference(box)
 
 	if Net.is_server():
 		_seeker_spin = _add_setting_spin(box, "Seekers:", "seeker_count", 1, 8, 1)
 		_add_setting_spin(box, "Hiding time:", "paint_time", 15, 300, 5, "s")
 		_add_setting_spin(box, "Seeking time:", "seek_time", 30, 600, 15, "s")
+		_add_setting_spin(box, "Shot cooldown:", "shot_cooldown", 0.1, 3.0, 0.1, "s")
+
+		var ammo_mode_row := HBoxContainer.new()
+		ammo_mode_row.add_theme_constant_override("separation", 10)
+		box.add_child(ammo_mode_row)
+		var ammo_mode_label := Label.new()
+		ammo_mode_label.text = "Ammo mode:"
+		ammo_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ammo_mode_row.add_child(ammo_mode_label)
+		var ammo_mode := OptionButton.new()
+		ammo_mode.add_item("Per hider")
+		ammo_mode.set_item_metadata(0, "per_hider")
+		ammo_mode.add_item("Fixed per seeker")
+		ammo_mode.set_item_metadata(1, "fixed")
+		ammo_mode.select(1 if App.settings["ammo_mode"] == "fixed" else 0)
+		ammo_mode.item_selected.connect(func(index: int) -> void:
+			App.settings["ammo_mode"] = str(ammo_mode.get_item_metadata(index))
+			Net.update_lobby_settings())
+		ammo_mode_row.add_child(ammo_mode)
 		_add_setting_spin(box, "Ammo per hider:", "ammo_per_hider", 1, 10, 1)
+		_add_setting_spin(box, "Fixed ammo per seeker:", "ammo_per_seeker", 1, 50, 1)
+		_add_setting_spin(box, "Survival points/sec:", "survival_pps", 0, 10, 0.5)
+		_add_setting_spin(box, "Visible-risk points/sec:", "bold_pps", 0, 20, 0.5)
+		_add_setting_spin(box, "Points per find:", "kill_points", 0, 500, 25)
+		_add_setting_spin(box, "Survivor bonus:", "survive_bonus", 0, 500, 25)
+		_add_setting_spin(box, "Seeker sweep bonus:", "sweep_bonus", 0, 500, 25)
 
 		var map_row := HBoxContainer.new()
 		map_row.add_theme_constant_override("separation", 10)
@@ -94,12 +123,31 @@ func _build_ui() -> void:
 		_map_option.item_selected.connect(func(index: int) -> void:
 			App.select_map(str(_map_option.get_item_metadata(index))))
 		map_row.add_child(_map_option)
+		_map_option.item_selected.connect(func(_index: int) -> void:
+			Net.update_lobby_settings())
+
+		var defaults_btn := Button.new()
+		defaults_btn.text = "RESTORE DEFAULT SETTINGS"
+		defaults_btn.pressed.connect(func() -> void:
+			App.reset_match_settings()
+			Net.update_lobby_settings()
+			get_tree().reload_current_scene())
+		box.add_child(defaults_btn)
 
 		_start_btn = Button.new()
 		_start_btn.text = "START MATCH"
 		_start_btn.custom_minimum_size = Vector2(0, 48)
 		_start_btn.pressed.connect(_on_start_pressed)
 		box.add_child(_start_btn)
+
+	else:
+		_settings_summary = Label.new()
+		_settings_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_settings_summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_settings_summary.add_theme_font_size_override("font_size", 13)
+		_settings_summary.add_theme_color_override("font_color", Color("b8bfce"))
+		box.add_child(_settings_summary)
+		_refresh_settings_summary(Net.lobby_settings)
 
 	_hint = Label.new()
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -179,6 +227,30 @@ func _build_avatar_picker(box: VBoxContainer) -> void:
 	_update_avatar_preview(App.selected_avatar)
 
 
+func _build_role_preference(box: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	box.add_child(row)
+	var label := Label.new()
+	label.text = "Role preference:"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	_role_option = OptionButton.new()
+	for item: Dictionary in [
+		{"id": "none", "label": "No Preference"},
+		{"id": "seeker", "label": "Prefer Seeker"},
+		{"id": "hider", "label": "Prefer Hider"},
+	]:
+		var index := _role_option.item_count
+		_role_option.add_item(item["label"])
+		_role_option.set_item_metadata(index, item["id"])
+		if item["id"] == App.selected_role_preference:
+			_role_option.select(index)
+	_role_option.item_selected.connect(func(index: int) -> void:
+		Net.request_role_preference(str(_role_option.get_item_metadata(index))))
+	row.add_child(_role_option)
+
+
 func _on_avatar_selected(index: int) -> void:
 	var avatar_id := str(_avatar_option.get_item_metadata(index))
 	Net.request_avatar(avatar_id)
@@ -223,9 +295,32 @@ func _add_setting_spin(box: VBoxContainer, text: String, key: String,
 	spin.set_value_no_signal(float(App.settings[key]))
 	var as_int: bool = App.settings[key] is int
 	spin.value_changed.connect(func(v: float) -> void:
-		App.settings[key] = int(v) if as_int else v)
+		App.settings[key] = int(v) if as_int else v
+		Net.update_lobby_settings())
 	row.add_child(spin)
 	return spin
+
+
+func _refresh_settings_summary(snapshot: Dictionary) -> void:
+	if _settings_summary == null:
+		return
+	var cfg := snapshot if not snapshot.is_empty() else App.settings
+	var ammo_text := (
+			"%d fixed" % int(cfg.get("ammo_per_seeker", 9))
+			if cfg.get("ammo_mode", "per_hider") == "fixed"
+			else "%d per hider" % int(cfg.get("ammo_per_hider", 3)))
+	_settings_summary.text = (
+			"MATCH SETTINGS  •  %ds hide  •  %ds seek  •  %d seeker(s)\n"
+			+ "%s  •  %.1fs cooldown  •  %s\n"
+			+ "Scoring: %.1f survival/s, %.1f visible/s, %d find, %d survivor, %d sweep") % [
+			int(cfg.get("paint_time", 90)), int(cfg.get("seek_time", 180)),
+			int(cfg.get("seeker_count", 1)),
+			str(App.MAPS.get(str(cfg.get("map_id", App.DEFAULT_MAP_ID)),
+					App.MAPS[App.DEFAULT_MAP_ID])["label"]),
+			float(cfg.get("shot_cooldown", 0.8)), ammo_text,
+			float(cfg.get("survival_pps", 1.0)), float(cfg.get("bold_pps", 3.0)),
+			int(cfg.get("kill_points", 100)), int(cfg.get("survive_bonus", 75)),
+			int(cfg.get("sweep_bonus", 50))]
 
 
 func _refresh() -> void:
@@ -239,8 +334,11 @@ func _refresh() -> void:
 		var me := "  <- you" if id == multiplayer.get_unique_id() else ""
 		var avatar_id := AvatarCatalog.normalize(str(
 				Net.players[id].get("avatar", AvatarCatalog.DEFAULT_ID)))
-		row.text = "%s  —  %s%s%s" % [Net.players[id]["name"],
-				AvatarCatalog.label(avatar_id), tag, me]
+		var preference := str(Net.players[id].get("preference", "none"))
+		var preference_label: String = {"none": "no preference", "seeker": "prefers seeker",
+				"hider": "prefers hider"}.get(preference, "no preference")
+		row.text = "%s  —  %s, %s%s%s" % [Net.players[id]["name"],
+				AvatarCatalog.label(avatar_id), preference_label, tag, me]
 		row.add_theme_color_override("font_color", Color("d8dce6"))
 		_player_list.add_child(row)
 		if id == multiplayer.get_unique_id() and _avatar_option != null:
@@ -249,8 +347,20 @@ func _refresh() -> void:
 					_avatar_option.select(index)
 					_update_avatar_preview(avatar_id)
 					break
+		if id == multiplayer.get_unique_id() and _role_option != null:
+			for index in _role_option.item_count:
+				if str(_role_option.get_item_metadata(index)) == preference:
+					_role_option.select(index)
+					break
 	if Net.is_server():
 		var n := ids.size()
+		if _seeker_spin != null:
+			var max_seekers := maxi(1, n - 1)
+			_seeker_spin.max_value = max_seekers
+			if n > 1 and int(App.settings["seeker_count"]) > max_seekers:
+				App.settings["seeker_count"] = max_seekers
+				_seeker_spin.set_value_no_signal(max_seekers)
+				Net.update_lobby_settings()
 		_hint.text = "solo test mode: you'll hide with no seekers" if n == 1 else ""
 		_maybe_autostart(n)
 

@@ -19,9 +19,12 @@ func _initialize() -> void:
 	test_full_match_hiders_survive()
 	test_sweep_seekers_win()
 	test_ammo_and_cooldown()
+	test_ammo_exhaustion_ends_seek()
+	test_match_settings()
 	test_bold_scoring()
 	test_score_breakdown()
 	test_session_scoring_and_replay()
+	test_preference_aware_roles()
 	test_hidden_readiness()
 	test_disconnect_wins()
 	test_solo_mode()
@@ -29,6 +32,7 @@ func _initialize() -> void:
 	test_paint_splat()
 	test_paint_stroke()
 	test_articulated_ragdoll()
+	test_results_pose_preservation()
 	test_hud_passes_mouse_through()
 	test_travel_facing()
 	test_seek_hider_slowdown()
@@ -146,6 +150,93 @@ func test_ammo_and_cooldown() -> void:
 	check(not ms.consume_shot(hider), "hiders can never shoot")
 
 
+func test_ammo_exhaustion_ends_seek() -> void:
+	print("ammo exhaustion:")
+	var single := _make(2, 1, {"ammo_per_hider": 1, "seek_time": 100.0})
+	single.start()
+	_tick_until(single, MatchState.Phase.SEEK)
+	var seeker: int = single.seekers()[0]
+	check(single.consume_shot(seeker), "single seeker's final shot is accepted")
+	check(single.phase == MatchState.Phase.SEEK,
+			"consuming final ammo waits for the shot result")
+	single.complete_shot()
+	check(single.phase == MatchState.Phase.RESULTS
+			and single.winner == MatchState.Team.HIDERS,
+			"final-shot miss ends SEEK immediately with a hider win")
+
+	var multiple := _make(3, 2, {"ammo_per_hider": 1, "shot_cooldown": 0.0})
+	multiple.start()
+	_tick_until(multiple, MatchState.Phase.SEEK)
+	var seekers: Array = multiple.seekers()
+	check(multiple.consume_shot(seekers[0]), "first seeker spends their final shot")
+	multiple.complete_shot()
+	check(multiple.phase == MatchState.Phase.SEEK,
+			"one empty seeker does not end while another still has ammo")
+	check(multiple.consume_shot(seekers[1]), "second seeker spends the last team shot")
+	multiple.complete_shot()
+	check(multiple.phase == MatchState.Phase.RESULTS
+			and multiple.winner == MatchState.Team.HIDERS,
+			"all seekers empty ends the round")
+
+	var last_hit := _make(2, 1, {"ammo_per_hider": 1, "shot_cooldown": 0.0})
+	last_hit.start()
+	_tick_until(last_hit, MatchState.Phase.SEEK)
+	seeker = last_hit.seekers()[0]
+	var final_hider: int = last_hit.hiders()[0]
+	last_hit.consume_shot(seeker)
+	check(last_hit.report_hit(seeker, final_hider), "final shot can eliminate its target")
+	last_hit.complete_shot()
+	check(last_hit.phase == MatchState.Phase.RESULTS
+			and last_hit.winner == MatchState.Team.SEEKERS,
+			"final-shot sweep is not overwritten by ammo exhaustion")
+
+	var roster := _make(4, 2, {"ammo_per_hider": 1, "shot_cooldown": 0.0})
+	roster.start()
+	_tick_until(roster, MatchState.Phase.SEEK)
+	seekers = roster.seekers()
+	while roster.ammo_of(seekers[0]) > 0:
+		roster.consume_shot(seekers[0])
+		roster.complete_shot()
+	check(roster.phase == MatchState.Phase.SEEK,
+			"empty seeker waits while a roster teammate has ammo")
+	roster.remove_player(seekers[1])
+	check(roster.phase == MatchState.Phase.RESULTS
+			and roster.winner == MatchState.Team.HIDERS,
+			"seeker disconnect re-evaluates remaining team ammo")
+
+
+func test_match_settings() -> void:
+	print("match settings:")
+	var fixed := _make(4, 1, {"ammo_mode": "fixed", "ammo_per_seeker": 7})
+	fixed.start()
+	_tick_until(fixed, MatchState.Phase.SEEK)
+	check(fixed.ammo_of(fixed.seekers()[0]) == 7,
+			"fixed-ammo mode ignores the hider count")
+	var app := AppScript.new()
+	app.apply_match_settings({
+		"map_id": "not-a-map", "paint_time": -5, "seek_time": 9999,
+		"shot_cooldown": 0, "ammo_mode": "invalid", "ammo_per_seeker": 999,
+		"survival_pps": 99, "kill_points": -1,
+	})
+	check(app.settings["map_id"] == app.DEFAULT_MAP_ID,
+			"invalid replicated map falls back safely")
+	check(app.settings["paint_time"] == 15.0 and app.settings["seek_time"] == 600.0,
+			"phase durations clamp to safe limits")
+	check(app.settings["shot_cooldown"] == 0.1
+			and app.settings["ammo_per_seeker"] == 50,
+			"weapon settings clamp to safe limits")
+	check(app.settings["ammo_mode"] == "per_hider"
+			and app.settings["survival_pps"] == 10.0
+			and app.settings["kill_points"] == 0,
+			"unknown modes and scoring values are normalized")
+	app.apply_match_settings({"paint_time": 4.0, "seek_time": 6.0, "_fast_phases": true})
+	check(app.settings["paint_time"] == 4.0 and app.settings["seek_time"] == 6.0,
+			"explicit test-mode snapshots preserve fast phase durations")
+	app.reset_match_settings()
+	check(app.settings == app.DEFAULT_SETTINGS, "restore defaults resets every match rule")
+	app.free()
+
+
 func test_bold_scoring() -> void:
 	print("bold (line-of-sight) scoring:")
 	var ms := _make(2, 1, {"seek_time": 100.0})
@@ -224,6 +315,47 @@ func test_session_scoring_and_replay() -> void:
 	check(session.all_replay_ready([1, 2]), "replay unlocks when every player is ready")
 	session.remove_player(2)
 	check(not session.totals.has(2), "disconnect removes score identity instead of allowing inheritance")
+
+
+func test_preference_aware_roles() -> void:
+	print("preference-aware role rotation:")
+	var session: RefCounted = SessionStateScript.new()
+	session.reset([])
+	for id in 4:
+		session.add_player(id + 1, "Player%d" % (id + 1))
+	var prefs := {1: "seeker", 2: "hider", 3: "none", 4: "none"}
+	var selected: Array = session.assign_roles(prefs, 1, 7)
+	check(selected == [1], "matching seeker volunteer is served before other pools")
+
+	var one_sided := {1: "seeker", 2: "none", 3: "none", 4: "none"}
+	var ignored: Array = session.assign_roles(one_sided, 1, 7)
+	check(ignored[0] != 1,
+			"one-sided preferences are ignored in favor of least-recent fairness")
+
+	var rotation := SessionStateScript.new()
+	rotation.reset([])
+	for id in 3:
+		rotation.add_player(id + 1, "R%d" % (id + 1))
+	var none := {1: "none", 2: "none", 3: "none"}
+	var seen := {}
+	for round_index in 3:
+		rotation.rounds_played = round_index
+		seen[rotation.assign_roles(none, 1, 5 + round_index)[0]] = true
+	check(seen.size() == 3, "least-recent rotation serves every eligible player")
+
+	var reconnect := SessionStateScript.new()
+	reconnect.reset([])
+	reconnect.add_player(10, "StableName")
+	reconnect.add_player(20, "Other")
+	reconnect.assign_roles({10: "none", 20: "none"}, 1, 2)
+	var prior_history: Dictionary = reconnect.role_history["StableName"].duplicate()
+	reconnect.remove_player(10)
+	reconnect.add_player(30, "StableName")
+	check(reconnect.role_history["StableName"] == prior_history,
+			"reconnect with the same lobby identity preserves role history")
+	reconnect.assign_roles({30: "hider", 20: "seeker"}, 1, 3)
+	check(reconnect.role_history["StableName"]["seeker"] == prior_history["seeker"],
+			"preference changes do not erase recorded role history")
 
 
 func test_hidden_readiness() -> void:
@@ -447,6 +579,25 @@ func test_articulated_ragdoll() -> void:
 	body.free()
 
 
+func test_results_pose_preservation() -> void:
+	print("results pose preservation:")
+	var body: PaintableBody = PaintableBodyScript.new()
+	body.build(8, Color.WHITE)
+	body.set_ragdoll(true, false)
+	var pose_before := body.capture_pose()
+	body.freeze_ragdoll_pose()
+	check(body.ragdolled, "results freeze keeps the articulated ragdoll active")
+	check(body.capture_pose() == pose_before, "results freeze preserves every part transform")
+	var all_frozen := true
+	var all_noncolliding := true
+	for part: RigidBody3D in body.part_bodies:
+		all_frozen = all_frozen and part.freeze
+		all_noncolliding = all_noncolliding and part.collision_mask == 0
+	check(all_frozen, "survivor ragdoll no longer simulates during inspection")
+	check(all_noncolliding, "inspection movement cannot disturb survivor parts")
+	body.free()
+
+
 func test_hud_passes_mouse_through() -> void:
 	print("hud mouse filters:")
 	# A STOP control at screen center (the crosshair) eats captured-mouse
@@ -490,6 +641,12 @@ func test_hud_passes_mouse_through() -> void:
 	check(hud._results.visible, "RESULTS phase change keeps the scoreboard visible")
 	check(not hud._counting and hud._timer_label.text.is_empty(),
 			"RESULTS phase hides and stops the HUD countdown")
+	hud.toggle_results_inspection()
+	check(not hud._results.visible,
+			"inspection toggle hides scores for mouse-look without ending results")
+	hud.toggle_results_inspection()
+	check(hud._results.visible,
+			"inspection toggle restores the scoreboard and cursor")
 	hud.on_phase(MatchStateScript.Phase.PAINT, 5.0, MatchStateScript.Role.HIDER, {})
 	check(not hud._results.visible, "next round's PAINT phase clears the scoreboard")
 	hud.setup(MatchStateScript.Role.HIDER, true)
@@ -501,7 +658,8 @@ func test_hud_passes_mouse_through() -> void:
 			"host early-seek action unlocks when every hider is ready")
 	var app := AppScript.new()
 	app._setup_input_map()
-	check(InputMap.has_action("toggle_hidden") and InputMap.has_action("start_seeking_early"),
+	check(InputMap.has_action("toggle_hidden") and InputMap.has_action("start_seeking_early")
+			and InputMap.has_action("toggle_results"),
 			"readiness keyboard actions are registered")
 	app.free()
 	hud.free()

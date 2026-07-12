@@ -12,9 +12,9 @@ import (
 
 func TestAssetForPlatform(t *testing.T) {
 	assets := []asset{
-		{Name: "mega-chamomile-linux-x86_64.zip", BrowserDownloadURL: "https://example.test/linux"},
-		{Name: "mega-chamomile-windows-x86_64.zip", BrowserDownloadURL: "https://example.test/windows"},
-		{Name: "mega-chamomile-macos-universal.zip", BrowserDownloadURL: "https://example.test/macos"},
+		{Name: "paint-n-seek-linux-x86_64.zip", BrowserDownloadURL: "https://example.test/linux"},
+		{Name: "paint-n-seek-windows-x86_64.zip", BrowserDownloadURL: "https://example.test/windows"},
+		{Name: "paint-n-seek-macos-universal.zip", BrowserDownloadURL: "https://example.test/macos"},
 	}
 	tests := []struct {
 		goos, goarch, wanted string
@@ -51,8 +51,8 @@ func TestValidSHA256Digest(t *testing.T) {
 
 func TestParseChecksum(t *testing.T) {
 	wanted := strings.Repeat("b", 64)
-	input := wanted + "  unrelated.zip\n" + wanted + "  mega-chamomile-linux-x86_64.zip\n"
-	got, err := parseChecksum(strings.NewReader(input), "mega-chamomile-linux-x86_64.zip")
+	input := wanted + "  unrelated.zip\n" + wanted + "  paint-n-seek-linux-x86_64.zip\n"
+	got, err := parseChecksum(strings.NewReader(input), "paint-n-seek-linux-x86_64.zip")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestExtractZip(t *testing.T) {
 		t.Fatal(err)
 	}
 	writer := zip.NewWriter(file)
-	header := &zip.FileHeader{Name: "game/mega-chamomile.x86_64", Method: zip.Deflate}
+	header := &zip.FileHeader{Name: "game/paint-n-seek.x86_64", Method: zip.Deflate}
 	header.SetMode(0o755)
 	entry, err := writer.CreateHeader(header)
 	if err != nil {
@@ -88,7 +88,7 @@ func TestExtractZip(t *testing.T) {
 	if err := extractZip(archivePath, destination); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(destination, "game", "mega-chamomile.x86_64"))
+	data, err := os.ReadFile(filepath.Join(destination, "game", "paint-n-seek.x86_64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,12 +157,12 @@ func TestSaveCurrentReplacesExistingMetadata(t *testing.T) {
 	}
 }
 
-// Set MEGA_CHAMOMILE_TEST_MACOS_ARCHIVE to exercise the extractor against a
+// Set PAINT_N_SEEK_TEST_MACOS_ARCHIVE to exercise the extractor against a
 // real release package without making normal unit tests depend on the network.
 func TestReleaseArchiveOptional(t *testing.T) {
-	archivePath := os.Getenv("MEGA_CHAMOMILE_TEST_MACOS_ARCHIVE")
+	archivePath := os.Getenv("PAINT_N_SEEK_TEST_MACOS_ARCHIVE")
 	if archivePath == "" {
-		t.Skip("MEGA_CHAMOMILE_TEST_MACOS_ARCHIVE is not set")
+		t.Skip("PAINT_N_SEEK_TEST_MACOS_ARCHIVE is not set")
 	}
 	destination := t.TempDir()
 	if err := extractZip(archivePath, destination); err != nil {

@@ -185,6 +185,19 @@ func set_ragdoll(active: bool, simulate: bool, inherited_velocity: Vector3 = Vec
 			rb.transform = _authored_transforms[i]
 
 
+## Preserve an articulated pose for results inspection without rebuilding the
+## standing rig. Disabling collisions keeps walking seekers from disturbing it.
+func freeze_ragdoll_pose() -> void:
+	if not ragdolled:
+		return
+	for rb in part_bodies:
+		rb.freeze = true
+		rb.sleeping = true
+		rb.linear_velocity = Vector3.ZERO
+		rb.angular_velocity = Vector3.ZERO
+		rb.collision_mask = 0
+
+
 func capture_pose() -> Array[Transform3D]:
 	var pose: Array[Transform3D] = []
 	for rb in part_bodies:

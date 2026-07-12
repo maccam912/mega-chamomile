@@ -487,7 +487,7 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 		_replay_start_button = null
 
 	var back := Label.new()
-	back.text = "Results stay open until the host starts the next round. Press Esc to leave."
+	back.text = "Tab: inspect survivors / reopen results. Esc: leave."
 	back.add_theme_font_size_override("font_size", 14)
 	back.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	back.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -497,6 +497,15 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 	_replay_ready_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	if _replay_start_button != null:
 		_replay_start_button.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+func toggle_results_inspection() -> void:
+	if _results == null:
+		return
+	_results.visible = not _results.visible
+	Input.mouse_mode = (
+			Input.MOUSE_MODE_VISIBLE if _results.visible
+			else Input.MOUSE_MODE_CAPTURED)
 
 
 func set_replay_readiness(ready_ids: Array, my_id: int, player_count: int) -> void:

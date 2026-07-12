@@ -1,4 +1,4 @@
-# Mega Chamomile
+# Paint-n-Seek
 
 A multiplayer hide-and-seek game where hiders paint their own bodies to blend
 into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
@@ -13,7 +13,14 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
 - Pick a **Human, Cat, or Dog** in the lobby. The choice is replicated, and all
   three bodies support the same painting, movement, shooting, and ragdoll loop.
 - **Seekers** wait blindfolded during the paint phase, then hunt with limited
-  ammo before the timer runs out.
+  ammo before the timer runs out. The round ends early once every seeker's
+  final shot has resolved.
+- Nearby hosted games appear automatically on the main menu; manual IP joining
+  remains available. Players can state a role preference, and replay role
+  assignment rotates fairly across the lobby session.
+- Hosts can configure phase times, seeker count, fixed or per-hider ammo,
+  cooldown, scoring values, and map. Guests see the complete settings summary
+  before the match starts.
 
 ## Run
 

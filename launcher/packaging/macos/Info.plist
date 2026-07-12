@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mega Chamomile Launcher</string>
+	<string>Paint-n-Seek Launcher</string>
 	<key>CFBundleExecutable</key>
-	<string>Mega Chamomile Launcher</string>
+	<string>Paint-n-Seek Launcher</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.megachamomile.launcher</string>
+	<string>com.paintnseek.launcher</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Mega Chamomile Launcher</string>
+	<string>Paint-n-Seek Launcher</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

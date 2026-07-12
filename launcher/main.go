@@ -30,7 +30,7 @@ var (
 )
 
 const (
-	applicationDirectory = "MegaChamomile"
+	applicationDirectory = "PaintNSeek"
 	githubAPIVersion     = "2026-03-10"
 	maxExtractedSize     = int64(8 << 30)
 )
@@ -65,7 +65,7 @@ type updater struct {
 
 func main() {
 	if err := run(); err != nil {
-		showError("Mega Chamomile could not start", err.Error())
+		showError("Paint-n-Seek could not start", err.Error())
 		os.Exit(1)
 	}
 }
@@ -88,7 +88,7 @@ func run() error {
 	defer logFile.Close()
 
 	logger := log.New(io.MultiWriter(os.Stdout, logFile), "", log.LstdFlags)
-	logger.Printf("Mega Chamomile launcher %s starting on %s/%s", launcherVersion, runtime.GOOS, runtime.GOARCH)
+	logger.Printf("Paint-n-Seek launcher %s starting on %s/%s", launcherVersion, runtime.GOOS, runtime.GOARCH)
 
 	releaseLock, err := acquireLock(baseDir)
 	if errors.Is(err, errAlreadyRunning) {
@@ -226,7 +226,7 @@ func (u *updater) fetchLatestRelease() (release, error) {
 func (u *updater) setGitHubHeaders(req *http.Request) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", githubAPIVersion)
-	req.Header.Set("User-Agent", "Mega-Chamomile-Launcher/"+launcherVersion)
+	req.Header.Set("User-Agent", "Paint-n-Seek-Launcher/"+launcherVersion)
 }
 
 func assetForPlatform(assets []asset, goos, goarch string) (asset, error) {
@@ -236,17 +236,17 @@ func assetForPlatform(assets []asset, goos, goarch string) (asset, error) {
 		if goarch != "amd64" {
 			return asset{}, fmt.Errorf("Windows on %s is not supported", goarch)
 		}
-		wanted = "mega-chamomile-windows-x86_64.zip"
+		wanted = "paint-n-seek-windows-x86_64.zip"
 	case "linux":
 		if goarch != "amd64" {
 			return asset{}, fmt.Errorf("Linux on %s is not supported", goarch)
 		}
-		wanted = "mega-chamomile-linux-x86_64.zip"
+		wanted = "paint-n-seek-linux-x86_64.zip"
 	case "darwin":
 		if goarch != "amd64" && goarch != "arm64" {
 			return asset{}, fmt.Errorf("macOS on %s is not supported", goarch)
 		}
-		wanted = "mega-chamomile-macos-universal.zip"
+		wanted = "paint-n-seek-macos-universal.zip"
 	default:
 		return asset{}, fmt.Errorf("%s is not a supported operating system", goos)
 	}
@@ -324,7 +324,7 @@ func (u *updater) install(latest release, gameAsset asset) (installedVersion, er
 	if runtime.GOOS != "windows" {
 		executable := target
 		if runtime.GOOS == "darwin" {
-			executable = filepath.Join(target, "Contents", "MacOS", "Mega Chamomile")
+			executable = filepath.Join(target, "Contents", "MacOS", "Paint-n-Seek")
 		}
 		if err := os.Chmod(executable, 0o755); err != nil {
 			return installedVersion{}, fmt.Errorf("make game executable: %w", err)
@@ -352,7 +352,7 @@ func (u *updater) download(gameAsset asset, destination string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "Mega-Chamomile-Launcher/"+launcherVersion)
+	req.Header.Set("User-Agent", "Paint-n-Seek-Launcher/"+launcherVersion)
 
 	resp, err := u.client.Do(req)
 	if err != nil {
@@ -405,7 +405,7 @@ func (u *updater) expectedDigest(latest release, gameAsset asset) (string, error
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "Mega-Chamomile-Launcher/"+launcherVersion)
+	req.Header.Set("User-Agent", "Paint-n-Seek-Launcher/"+launcherVersion)
 	resp, err := u.client.Do(req)
 	if err != nil {
 		return "", err
@@ -533,16 +533,16 @@ func findLaunchTarget(directory, goos string) (string, error) {
 	var wanted string
 	switch goos {
 	case "windows":
-		wanted = "mega-chamomile.exe"
+		wanted = "paint-n-seek.exe"
 	case "linux":
-		wanted = "mega-chamomile.x86_64"
+		wanted = "paint-n-seek.x86_64"
 	case "darwin":
-		app := filepath.Join(directory, "Mega Chamomile.app")
-		executable := filepath.Join(app, "Contents", "MacOS", "Mega Chamomile")
+		app := filepath.Join(directory, "Paint-n-Seek.app")
+		executable := filepath.Join(app, "Contents", "MacOS", "Paint-n-Seek")
 		if info, err := os.Stat(executable); err == nil && info.Mode().IsRegular() {
 			return app, nil
 		}
-		return "", errors.New("the macOS package does not contain Mega Chamomile.app")
+		return "", errors.New("the macOS package does not contain Paint-n-Seek.app")
 	default:
 		return "", fmt.Errorf("unsupported operating system %s", goos)
 	}
@@ -626,7 +626,7 @@ func (u *updater) targetPath(current installedVersion) (string, error) {
 	}
 	target := filepath.Join(versionDir, cleaned)
 	if runtime.GOOS == "darwin" {
-		target = filepath.Join(target, "Contents", "MacOS", "Mega Chamomile")
+		target = filepath.Join(target, "Contents", "MacOS", "Paint-n-Seek")
 	}
 	info, err := os.Stat(target)
 	if err != nil || !info.Mode().IsRegular() {
@@ -640,7 +640,7 @@ func (u *updater) launch(current installedVersion) error {
 	if err != nil {
 		return err
 	}
-	u.logger.Printf("starting Mega Chamomile %s", current.TagName)
+	u.logger.Printf("starting Paint-n-Seek %s", current.TagName)
 
 	var command *exec.Cmd
 	if runtime.GOOS == "darwin" {

@@ -1,4 +1,4 @@
-# Mega Chamomile — Design & Architecture
+# Paint-n-Seek — Design & Architecture
 
 A multiplayer hide-and-seek "paint yourself to blend in" game, inspired by
 MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body

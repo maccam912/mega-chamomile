@@ -89,7 +89,7 @@ func _server_setup_match() -> void:
 	match_state.configure(App.settings)
 	for id: int in Net.players:
 		match_state.add_player(id, Net.players[id]["name"])
-	match_state.assign_roles(App.settings["seeker_count"])
+	match_state.assign_role_ids(Net.assign_session_roles(App.settings["seeker_count"]))
 
 	var hider_spots: Array = map.hider_spawns()
 	var seeker_spots: Array = map.seeker_spawns()
@@ -227,6 +227,9 @@ func _server_handle_shot(shooter_id: int, origin: Vector3, dir: Vector3) -> void
 	Net.broadcast_shot(shooter_id, origin, hit_pos)
 	if victim_id > 0:
 		match_state.report_hit(shooter_id, victim_id)
+	# Evaluate total ammo only after the final shot's raycast and elimination
+	# have resolved, so a last-round sweep still belongs to the seekers.
+	match_state.complete_shot()
 
 
 # --- all peers: reactions to broadcasts ---------------------------------------
@@ -298,6 +301,12 @@ func _on_phase_changed(phase: int, duration: float, extra: Dictionary) -> void:
 	var me := _player(multiplayer.get_unique_id())
 	if me != null:
 		me.on_phase(phase, extra)
+	if phase == MatchState.Phase.RESULTS:
+		# The score snapshot has already been captured and broadcast. Reveal only
+		# genuine surviving hiders, with no effect on authoritative LoS/scoring.
+		for player in players_node.get_children():
+			player.set_survivor_reveal(
+					player.role == MatchState.Role.HIDER and not player.eliminated)
 	if phase == MatchState.Phase.SEEK and my_role == MatchState.Role.HIDER:
 		hud.show_banner("seekers released!", Color("ff8a5c"))
 
@@ -356,7 +365,14 @@ func _on_replay_start_requested() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if pause_menu == null or pause_menu.visible or current_phase != MatchState.Phase.PAINT:
+	if pause_menu == null or pause_menu.visible:
+		return
+	if current_phase == MatchState.Phase.RESULTS \
+			and event.is_action_pressed("toggle_results"):
+		hud.toggle_results_inspection()
+		get_viewport().set_input_as_handled()
+		return
+	if current_phase != MatchState.Phase.PAINT:
 		return
 	if my_role == MatchState.Role.HIDER and event.is_action_pressed("toggle_hidden"):
 		Net.request_hidden_ready(not _my_hidden)

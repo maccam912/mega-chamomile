@@ -16,7 +16,9 @@ var cfg := {
 	"paint_time": 90.0,
 	"seek_time": 180.0,
 	"shot_cooldown": 0.8,
+	"ammo_mode": "per_hider",
 	"ammo_per_hider": 3,
+	"ammo_per_seeker": 9,
 	"survival_pps": 1.0,   # hider points per second alive during SEEK
 	"bold_pps": 3.0,       # extra points per second while in a seeker's sight
 	"kill_points": 100,
@@ -59,6 +61,7 @@ func remove_player(id: int) -> void:
 	players.erase(id)
 	if phase == Phase.PAINT or phase == Phase.SEEK:
 		_check_team_collapse()
+		_check_ammo_exhaustion()
 
 
 ## Randomly promotes `seeker_count` players to seekers; the rest are hiders.
@@ -80,6 +83,11 @@ func assign_roles(seeker_count: int, seed_val: int = -1) -> void:
 	seeker_count = clampi(seeker_count, 0, maxi(0, ids.size() - 1))
 	for i in ids.size():
 		players[ids[i]]["role"] = Role.SEEKER if i < seeker_count else Role.HIDER
+
+
+func assign_role_ids(seeker_ids: Array) -> void:
+	for id: int in players:
+		players[id]["role"] = Role.SEEKER if seeker_ids.has(id) else Role.HIDER
 
 
 func start() -> void:
@@ -119,6 +127,13 @@ func consume_shot(id: int) -> bool:
 	p["cooldown"] = cfg["shot_cooldown"]
 	p["ammo"] -= 1
 	return true
+
+
+## Called by the server after the raycast and optional hit have both resolved.
+## Keeping this separate from consume_shot() guarantees that a final round can
+## eliminate the last hider before zero-ammo victory is evaluated.
+func complete_shot() -> void:
+	_check_ammo_exhaustion()
 
 
 ## A validated shot hit a hider. Returns true if the elimination stands.
@@ -243,7 +258,10 @@ func _enter_phase(new_phase: int) -> void:
 			time_left = cfg["paint_time"]
 		Phase.SEEK:
 			time_left = cfg["seek_time"]
-			var ammo: int = cfg["ammo_per_hider"] * maxi(1, hiders().size())
+			var ammo: int = (
+					int(cfg["ammo_per_seeker"])
+					if cfg["ammo_mode"] == "fixed"
+					else int(cfg["ammo_per_hider"]) * maxi(1, hiders().size()))
 			for id: int in seekers():
 				players[id]["ammo"] = ammo
 		Phase.RESULTS:
@@ -289,3 +307,18 @@ func _check_team_collapse() -> void:
 		_finish(Team.HIDERS)
 	elif alive_hiders().is_empty() and not no_seekers:
 		_finish(Team.SEEKERS)
+
+
+## If no active seeker can fire again, the remaining hiders have survived.
+## This is called only after a shot is fully resolved or the seeker roster
+## changes, never at the moment ammo is consumed.
+func _check_ammo_exhaustion() -> void:
+	if phase != Phase.SEEK or alive_hiders().is_empty():
+		return
+	var active_seekers := seekers()
+	if active_seekers.is_empty():
+		return  # Team collapse owns the no-seeker outcome.
+	for id: int in active_seekers:
+		if ammo_of(id) > 0:
+			return
+	_finish(Team.HIDERS)

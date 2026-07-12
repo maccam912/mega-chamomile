@@ -5,6 +5,7 @@ var _name_edit: LineEdit
 var _ip_edit: LineEdit
 var _status: Label
 var _buttons: Array[Button] = []
+var _lan_list: VBoxContainer
 
 
 func _ready() -> void:
@@ -12,6 +13,8 @@ func _ready() -> void:
 	Net.leave()
 	Net.join_failed.connect(_on_join_failed)
 	Net.joined_ok.connect(_on_joined_ok)
+	Net.lan_games_changed.connect(_on_lan_games_changed)
+	Net.start_lan_discovery()
 	if App.status_message != "":
 		_status.text = App.status_message
 		App.status_message = ""
@@ -34,7 +37,7 @@ func _build_ui() -> void:
 	center.add_child(box)
 
 	var title := Label.new()
-	title.text = "MEGA CHAMOMILE"
+	title.text = "PAINT-N-SEEK"
 	title.add_theme_font_size_override("font_size", 44)
 	title.add_theme_color_override("font_color", Color("f5f0e6"))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -51,7 +54,7 @@ func _build_ui() -> void:
 
 	_name_edit = LineEdit.new()
 	_name_edit.placeholder_text = "Your name"
-	_name_edit.text = "Chamomile%03d" % (randi() % 1000)
+	_name_edit.text = "Painter%03d" % (randi() % 1000)
 	_name_edit.max_length = 20
 	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_name_edit)
@@ -74,6 +77,17 @@ func _build_ui() -> void:
 	join_btn.custom_minimum_size = Vector2(120, 0)
 	join_btn.pressed.connect(_on_join_pressed)
 	join_row.add_child(join_btn)
+
+	var lan_heading := Label.new()
+	lan_heading.text = "GAMES ON YOUR NETWORK"
+	lan_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lan_heading.add_theme_font_size_override("font_size", 13)
+	lan_heading.add_theme_color_override("font_color", Color("8fd18a"))
+	box.add_child(lan_heading)
+	_lan_list = VBoxContainer.new()
+	_lan_list.add_theme_constant_override("separation", 6)
+	box.add_child(_lan_list)
+	_on_lan_games_changed([])
 
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -128,6 +142,7 @@ func _on_host_pressed() -> void:
 
 
 func _on_join_pressed() -> void:
+	Net.stop_lan_discovery()
 	App.play_ui_click()
 	Net.my_name = _name_edit.text.strip_edges()
 	var ip := _ip_edit.text.strip_edges()
@@ -149,6 +164,32 @@ func _on_joined_ok() -> void:
 func _on_join_failed(msg: String) -> void:
 	_set_busy(false)
 	_status.text = msg
+	Net.start_lan_discovery()
+
+
+func _on_lan_games_changed(games: Array) -> void:
+	if _lan_list == null:
+		return
+	for child in _lan_list.get_children():
+		child.queue_free()
+	if games.is_empty():
+		var searching := Label.new()
+		searching.text = "Searching… (manual IP still works)"
+		searching.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		searching.add_theme_color_override("font_color", Color("747d91"))
+		_lan_list.add_child(searching)
+		return
+	for game: Dictionary in games:
+		var button := Button.new()
+		var compatible := bool(game.get("compatible", false))
+		button.text = "%s  •  %d/%d players%s" % [
+				str(game.get("host", "LAN game")), int(game.get("players", 0)),
+				int(game.get("capacity", 16)), "" if compatible else "  •  incompatible"]
+		button.disabled = not compatible
+		button.pressed.connect(func() -> void:
+			_ip_edit.text = str(game["address"])
+			_on_join_pressed())
+		_lan_list.add_child(button)
 
 
 func _handle_cli() -> void:

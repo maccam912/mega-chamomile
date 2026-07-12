@@ -6,6 +6,28 @@ requests. It is planning documentation; items are unimplemented unless marked
 
 **Shipped so far (2026-07-12):**
 
+- `BRAND-01` **SHIPPED**: the game, menu title, desktop exports, release
+  artifacts, launcher UI, and package lookup now use Paint-n-Seek. The current
+  GitHub repository URL remains unchanged so installed launchers keep updating.
+- `ROLE-01` **SHIPPED**: lobby role preferences feed a persistent,
+  least-recently-served assignment history with fair fallback when preferences
+  are one-sided.
+- `ROUND-02` **SHIPPED**: seeking ends after the last available shot fully
+  resolves, while preserving last-shot sweeps and rechecking ammo after seeker
+  disconnects.
+- `NET-01` **SHIPPED**: available LAN hosts advertise over UDP and appear in a
+  live, deduplicated join list with compatibility and player-count details;
+  manual IP remains available.
+- `REVEAL-01` **SHIPPED**: survivor poses and paint remain intact in RESULTS,
+  frozen ragdolls cannot be pushed, high-contrast markers reveal survivors,
+  and Tab switches between the scoreboard and read-only scene inspection.
+- `SETTINGS-01` expanded slice: fixed/per-hider ammo, cooldown, all scoring
+  values, validation, defaults, lobby replication, and guest review are now
+  implemented. Character scale remains deferred pending physics playtesting.
+- `SCORE-01` **SHIPPED**: survival, visible-risk, find, and end-bonus scoring
+  are server-authoritative, shown separately in results, and host-tuneable.
+- `UI-01` foundation: the project now uses a 1280×720 logical canvas-items
+  scaling policy with high-DPI support and expandable aspect handling.
 - `HIDE-01` **SHIPPED**: hiders can confirm or undo readiness during PAINT;
   everyone sees an aggregate count, and the host can release seekers early
   once every active hider is ready.
@@ -43,16 +65,16 @@ after investigation, especially for bugs.
 
 | ID | Effort | Confidence | Best grouping | Why |
 | --- | --- | --- | --- | --- |
-| `BRAND-01` | XS | High | Standalone | Mostly a finite rename/search pass. |
+| `BRAND-01` | **SHIPPED** | High | Standalone | Product, package, export, release, and launcher names now use Paint-n-Seek. |
 | `BUG-01` | **SHIPPED** | High | Movement regression test | The movement yaw included an extra half-turn, making the model face opposite its travel direction. |
 | `UI-01` | S–M | High | `UI-02`, `SETTINGS-01` | Central display scaling and theme sizing should address most Retina/Windows inconsistency, followed by a screen audit. |
-| `REVEAL-01` | S pose preservation / M full reveal | Medium | `ROUND-01`, results presentation | Keeping ragdoll state should be small; synchronized highlights and seeker-only results movement cross gameplay and rendering systems. |
-| `SCORE-01` | S–M | High | `SCORE-02`, `SETTINGS-01` | The core survival and line-of-sight scoring already exists; breakdowns and configuration are the new work. |
+| `REVEAL-01` | **SHIPPED** | Medium | `ROUND-01`, results presentation | Results preserve poses, reveal survivors, and support scene inspection. |
+| `SCORE-01` | **SHIPPED** | High | `SCORE-02`, `SETTINGS-01` | Results break down every component and the host can tune all scoring values. |
 | `HIDE-01` | **SHIPPED** | High | `ROUND-01`, `CAMERA-01` | Server-authoritative readiness gates an explicit host early-start action. |
-| `ROUND-02` | S | High | `MOVE-02`, round-end rules | The server already owns ammo and round completion; the final shot must resolve before checking for total ammo exhaustion. |
+| `ROUND-02` | **SHIPPED** | High | `MOVE-02`, round-end rules | Ammo exhaustion is checked after final-shot resolution and roster changes. |
 | `MOVE-02` | **SHIPPED** | High | `ROUND-02`, `SETTINGS-01` | Living hiders now use a fixed seek-phase-only 0.2 horizontal speed multiplier. |
 | `PAINT-01` | **SHIPPED** | High | Paint regression tests | Camera-ray-aligned cylindrical strokes paint front and hidden back surfaces while retaining the brush footprint. |
-| `NET-01` | M | High | Lobby and main-menu UI | LAN discovery can advertise existing ENet hosts and present them in a join list while retaining manual IP as a fallback. |
+| `NET-01` | **SHIPPED** | High | Lobby and main-menu UI | UDP discovery advertises existing ENet lobbies and populates a live join list. |
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
 | `UI-02` | M | High | `UI-01`, `BRAND-01` | A focused main-menu layout, styling, motion, and audio pass without changing game rules. |
 | `SCORE-02` | **SHIPPED** | High | `ROUND-01`, `ROLE-01` | Session totals use live peer identity and survive round scene reloads. |
@@ -60,7 +82,7 @@ after investigation, especially for bugs.
 | `MOVE-03` | S–M | High | `MOVE-01`, Hallwyl map collision | Add map-specific perimeter recovery plus authoritative position validation so near-map escapes return players safely instead of leaving them outside. |
 | `ROUND-01` | **SHIPPED** | High | `ROLE-01`, `SCORE-02` | Results readiness gates a host-controlled same-session scene reload. |
 | `ROUND-03` | **SHIPPED** | High | `ROUND-01`, results presentation | RESULTS is now an untimed phase with stable scores and persistent ready-up controls. |
-| `ROLE-01` | L | High | `ROUND-01`, `SCORE-02` | Adds persistent history, preference UI, a fairness algorithm, replication, and many rule tests. |
+| `ROLE-01` | **SHIPPED** | High | `ROUND-01`, `SCORE-02` | Preferences, persistent history, fairness, replication, and rule tests are implemented. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
 | `NET-02` | M feasibility spike / XL migration | Low | `NET-01`, networking architecture | Iroh may enable identity-based connections, NAT traversal, and relay fallback, but replacing Godot ENet requires an integration prototype first. |
@@ -71,24 +93,24 @@ after investigation, especially for bugs.
 
 These are good candidates when a small, independent improvement is wanted:
 
-1. `BRAND-01` — easiest overall, though it creates broad file churn and is best
-   done when the name is considered final.
+1. **SHIPPED** — `BRAND-01`: product, export, release, and launcher naming now
+   consistently uses Paint-n-Seek.
 2. **SHIPPED** — `BUG-01`: characters now face their travel direction instead
    of walking backward.
 3. Establish consistent UI scaling for `UI-01`, then audit the existing screens
    at representative Retina and Windows resolutions.
-4. Preserve surviving hiders' final ragdoll poses when the seek timer expires —
-   the smallest independently useful slice of `REVEAL-01`.
+4. **SHIPPED** — `REVEAL-01`: final poses are preserved and survivors can be
+   inspected from the results screen.
 5. **SHIPPED** — hiding time and seeking time are exposed in the lobby
    settings (`SETTINGS-01` slice).
-6. **SHIPPED** — ammo per hider is exposed in the lobby settings; a separate
-   fixed-ammo mode remains future `SETTINGS-01` work.
+6. **SHIPPED** — both per-hider and fixed-per-seeker ammo modes are exposed in
+   the lobby settings.
 7. **SHIPPED** — results display the `SCORE-01` scoring breakdown (survival,
    bold, finds, end bonus).
 8. Prototype a uniformly enlarged copy of one map for `AVATAR-01` — this may
    deliver the smaller-character feel without changing player physics.
-9. `ROUND-02` — end seeking as soon as every remaining seeker has spent all
-   ammunition, after resolving the final shot.
+9. **SHIPPED** — `ROUND-02`: seeking ends once all remaining seekers have spent
+   their ammunition, after resolving the final shot.
 10. **SHIPPED** — `MOVE-02`: living hiders move at one-fifth horizontal speed
     once seeking starts.
 11. `MOVE-03` — add automatic Hallwyl perimeter recovery for players who slip
@@ -244,7 +266,7 @@ any time through the existing Escape menu.
 - Headless tests tick RESULTS well beyond the old duration and confirm that it
   remains active until an explicit replay or exit action occurs.
 
-### ROLE-01: Preference-aware, fair role assignment
+### ROLE-01: Preference-aware, fair role assignment — **SHIPPED**
 
 **Requested behavior:** Let each player choose **Prefer Seeker**, **Prefer
 Hider**, or **No Preference**. Across replays, role assignment should honor
@@ -331,7 +353,7 @@ count after disconnects.
 
 ## P1 — Tighten seek-phase pacing
 
-### ROUND-02: End the round when all seekers are out of ammo
+### ROUND-02: End the round when all seekers are out of ammo — **SHIPPED**
 
 **Problem:** Once every seeker has completely exhausted their ammunition, they
 cannot eliminate another hider. Letting the seek timer continue only prolongs a
@@ -425,7 +447,7 @@ existing radius and falloff while reaching occluded and back-facing vertices.
 
 ## P1 — Make LAN games easy to join
 
-### NET-01: Discover hosted games on the local network
+### NET-01: Discover hosted games on the local network — **SHIPPED**
 
 **Problem:** Joining a nearby game currently requires finding and typing the
 host's LAN IP address every time.
@@ -453,7 +475,7 @@ available as a fallback.
 
 ## P1 — Multi-round scoring
 
-### SCORE-01: Reward risky visibility and time unfound
+### SCORE-01: Reward risky visibility and time unfound — **SHIPPED**
 
 **Requested behavior:** Score hiders from both (a) time spent inside any
 seeker's unobstructed line of sight and (b) how long they remain unfound.
@@ -495,7 +517,7 @@ ID. Leaving or starting a new host/join session resets all totals.
 
 ## P1 — Round-end reveal
 
-### REVEAL-01: Preserve hiding poses and let seekers inspect survivors
+### REVEAL-01: Preserve hiding poses and let seekers inspect survivors — **SHIPPED**
 
 **Problem:** When the seeking timer expires, hiders should not stand up or lose
 the pose that made their hiding spot work. Seekers should get a satisfying
@@ -796,7 +818,7 @@ eliminating hiders or ending after one sweep.
 
 ## P2 — Rename the game
 
-### BRAND-01: Rename “Mega Chamomile” to “Paint-n-Seek”
+### BRAND-01: Rename “Mega Chamomile” to “Paint-n-Seek” — **SHIPPED**
 
 **Acceptance criteria:**
 
@@ -891,8 +913,8 @@ cumulative score. Define one session model first, then let each feature use it.
 Implementing them independently risks three different ideas of when a session
 starts, resets, or survives a reconnect.
 
-`ROUND-01` can still ship before preferences if its first role reassignment uses
-the current random selection and leaves a clean hook for `ROLE-01`.
+`ROUND-01` originally shipped with random reassignment; `ROLE-01` now replaces
+that hook with persistent preference-aware rotation.
 
 ### Bundle B: Rules and host configuration
 

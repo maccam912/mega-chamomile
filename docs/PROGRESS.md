@@ -1,9 +1,42 @@
-# Mega Chamomile — Progress Log
+# Paint-n-Seek — Progress Log
 
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: extensible animal avatars shipped (session 9, 2026-07-12)
+## Status: backlog expansion shipped (session 10, 2026-07-12)
+
+### Session 10: rounds, roles, discovery, reveal, settings, and branding
+
+- Renamed player-facing product, export, release, launcher, and package names
+  to **Paint-n-Seek**, while preserving the current repository URL used by the
+  updater and all third-party attribution.
+- Added preference-aware fair role rotation across replays. Both-role
+  volunteers are honored first; one-sided requests fall back to the same
+  least-recently-served rotation used for neutral players. Reconnects with the
+  same process-local lobby identity retain history, even when display names
+  collide.
+- Seeking now ends immediately once every remaining seeker is out of ammo,
+  after the final shot resolves. Final-shot sweeps still award seeker wins,
+  and disconnects trigger authoritative re-evaluation.
+- Added UDP LAN lobby discovery with host/player/compatibility details,
+  duplicate coalescing, stale eviction, one-click joining, and manual-IP
+  fallback. Verified between two local Godot processes.
+- Results preserve standing and ragdoll survivor poses, disable survivor-body
+  pushing, add pulsing survivor markers, and let players press Tab between the
+  scoreboard and scene inspection. Seekers can move/look but cannot shoot or
+  alter completed scores.
+- Expanded settings with fixed/per-hider ammo, shot cooldown, every existing
+  scoring value, restore defaults, safe validation, host replication, and a
+  read-only guest summary. Character scale remains deferred for physics tests.
+- Completed configurable scoring: survival, visible-risk, find, survivor, and
+  sweep components remain separately visible and are now host-tuneable.
+- Established canvas-items scaling from a 1280×720 logical viewport with
+  high-DPI and expandable-aspect support.
+- Verified: 203 headless checks pass, launcher Go tests/vet pass, lobby and
+  menu smoke checks are clean, a real ENet match replicated settings/roles,
+  and a two-process LAN discovery check found the advertised host.
+
+## Previous status: extensible animal avatars shipped (session 9, 2026-07-12)
 
 ### Session 9: animal avatar roster (`AVATAR-02`)
 

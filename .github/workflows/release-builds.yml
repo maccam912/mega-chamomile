@@ -75,16 +75,16 @@ jobs:
 
           case "${{ matrix.platform }}" in
             linux)
-              godot --headless --path . --export-release Linux build/linux/mega-chamomile.x86_64
-              (cd build/linux && zip -9 -r ../../packages/mega-chamomile-linux-x86_64.zip .)
+              godot --headless --path . --export-release Linux build/linux/paint-n-seek.x86_64
+              (cd build/linux && zip -9 -r ../../packages/paint-n-seek-linux-x86_64.zip .)
               ;;
             windows)
-              godot --headless --path . --export-release 'Windows Desktop' build/windows/mega-chamomile.exe
-              (cd build/windows && zip -9 -r ../../packages/mega-chamomile-windows-x86_64.zip .)
+              godot --headless --path . --export-release 'Windows Desktop' build/windows/paint-n-seek.exe
+              (cd build/windows && zip -9 -r ../../packages/paint-n-seek-windows-x86_64.zip .)
               ;;
             macos)
-              godot --headless --path . --export-release macOS build/macos/mega-chamomile-macos-universal.zip
-              cp build/macos/mega-chamomile-macos-universal.zip packages/
+              godot --headless --path . --export-release macOS build/macos/paint-n-seek-macos-universal.zip
+              cp build/macos/paint-n-seek-macos-universal.zip packages/
               ;;
           esac
 
@@ -137,9 +137,9 @@ jobs:
             CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
               -trimpath \
               -ldflags "-s -w -X main.repository=${GITHUB_REPOSITORY} -X main.launcherVersion=${GITHUB_SHA}" \
-              -o ../launcher-dist/mega-chamomile-launcher .
+              -o ../launcher-dist/paint-n-seek-launcher .
           )
-          tar -C launcher-dist -czf packages/mega-chamomile-launcher-linux-x86_64.tar.gz mega-chamomile-launcher
+          tar -C launcher-dist -czf packages/paint-n-seek-launcher-linux-x86_64.tar.gz paint-n-seek-launcher
 
       - name: Build Windows launcher
         if: matrix.platform == 'windows'
@@ -149,14 +149,14 @@ jobs:
           Set-Location launcher
           $env:CGO_ENABLED = '0'
           $ldflags = "-s -w -H=windowsgui -X main.repository=$env:GITHUB_REPOSITORY -X main.launcherVersion=$env:GITHUB_SHA"
-          go build -trimpath -ldflags $ldflags -o ../packages/mega-chamomile-launcher-windows-x86_64.exe .
+          go build -trimpath -ldflags $ldflags -o ../packages/paint-n-seek-launcher-windows-x86_64.exe .
 
       - name: Build universal macOS launcher app
         if: matrix.platform == 'macos'
         shell: bash
         run: |
           set -euo pipefail
-          app="launcher-dist/Mega Chamomile Launcher.app"
+          app="launcher-dist/Paint-n-Seek Launcher.app"
           mkdir -p "$app/Contents/MacOS" packages
           for arch in amd64 arm64; do
             (
@@ -170,19 +170,19 @@ jobs:
           lipo -create \
             launcher-dist/launcher-amd64 \
             launcher-dist/launcher-arm64 \
-            -output "$app/Contents/MacOS/Mega Chamomile Launcher"
+            -output "$app/Contents/MacOS/Paint-n-Seek Launcher"
           cp launcher/packaging/macos/Info.plist "$app/Contents/Info.plist"
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
           ditto -c -k --sequesterRsrc --keepParent \
             "$app" \
-            packages/mega-chamomile-launcher-macos-universal.zip
+            packages/paint-n-seek-launcher-macos-universal.zip
 
       - name: Upload launcher package
         uses: actions/upload-artifact@v4
         with:
           name: launcher-${{ matrix.platform }}-${{ github.run_number }}-${{ github.run_attempt }}
-          path: packages/mega-chamomile-launcher-*
+          path: packages/paint-n-seek-launcher-*
           if-no-files-found: error
 
   release:
@@ -203,7 +203,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd packages && sha256sum mega-* > SHA256SUMS.txt)
+          (cd packages && sha256sum paint-n-seek-* > SHA256SUMS.txt)
 
       - name: Create release
         env:
@@ -216,15 +216,15 @@ jobs:
           notes="Automated desktop builds and launchers from commit ${GITHUB_SHA}.
 
           Launcher installation (recommended):
-          - Windows: download mega-chamomile-launcher-windows-x86_64.exe and double-click it.
-          - macOS: download and extract mega-chamomile-launcher-macos-universal.zip, then open Mega Chamomile Launcher.app.
-          - Linux: download and extract mega-chamomile-launcher-linux-x86_64.tar.gz, then run mega-chamomile-launcher.
+          - Windows: download paint-n-seek-launcher-windows-x86_64.exe and double-click it.
+          - macOS: download and extract paint-n-seek-launcher-macos-universal.zip, then open Paint-n-Seek Launcher.app.
+          - Linux: download and extract paint-n-seek-launcher-linux-x86_64.tar.gz, then run paint-n-seek-launcher.
 
           The launcher checks this repository's latest GitHub Release, downloads and verifies the correct game package only when needed, and then starts the game. It can use the last installed version while offline.
 
           macOS installation:
-          1. Extract the launcher ZIP and optionally move Mega Chamomile Launcher.app to Applications.
-          2. Control-click Mega Chamomile Launcher.app and choose Open the first time.
+          1. Extract the launcher ZIP and optionally move Paint-n-Seek Launcher.app to Applications.
+          2. Control-click Paint-n-Seek Launcher.app and choose Open the first time.
           3. Click Open in the confirmation dialog.
           4. If Open is not offered, use System Settings > Privacy & Security > Open Anyway.
 
@@ -233,5 +233,5 @@ jobs:
           gh release create "$tag" packages/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Mega Chamomile build ${GITHUB_RUN_NUMBER} (${short_sha})" \
+            --title "Paint-n-Seek build ${GITHUB_RUN_NUMBER} (${short_sha})" \
             --notes "$notes"

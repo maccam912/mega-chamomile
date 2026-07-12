@@ -46,6 +46,7 @@ var _rig: Node3D
 var _spring: SpringArm3D
 var _camera: Camera3D
 var _nameplate: Label3D
+var _reveal_marker: Label3D
 var _collisions: Array[CollisionShape3D] = []
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _camera_pivot := NORMAL_CAMERA_PIVOT
@@ -183,12 +184,36 @@ func on_phase(new_phase: int, extra: Dictionary) -> void:
 				if role == MatchState.Role.SEEKER and extra.has("ammo"):
 					ammo = extra["ammo"]
 			MatchState.Phase.RESULTS:
-				frozen = true
-				set_ragdoll(false)
+				# Surviving hiders keep their exact standing/ragdoll state. Seekers
+				# may walk around the completed scene, but phase gates disable shots.
+				frozen = role == MatchState.Role.HIDER
+				if role == MatchState.Role.HIDER and ragdolled:
+					body.freeze_ragdoll_pose()
 
 
 func set_nameplate_visible(v: bool) -> void:
 	_nameplate.visible = v
+
+
+func set_survivor_reveal(active: bool) -> void:
+	if not active:
+		if _reveal_marker != null:
+			_reveal_marker.queue_free()
+			_reveal_marker = null
+		return
+	if _reveal_marker != null:
+		return
+	_reveal_marker = Label3D.new()
+	_reveal_marker.name = "SurvivorReveal"
+	_reveal_marker.text = "SURVIVOR\n%s" % display_name
+	_reveal_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_reveal_marker.no_depth_test = true
+	_reveal_marker.font_size = 48
+	_reveal_marker.outline_size = 14
+	_reveal_marker.modulate = Color("fff06a")
+	_reveal_marker.outline_modulate = Color("361c5c")
+	_reveal_marker.pixel_size = 0.004
+	add_child(_reveal_marker)
 
 
 func target_position_global() -> Vector3:
@@ -313,6 +338,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if _reveal_marker != null:
+		var center := body.center_of_mass_global()
+		_reveal_marker.position = to_local(center) + Vector3.UP * 0.65 * _avatar_scale
+		var pulse := 0.78 + sin(Time.get_ticks_msec() * 0.006) * 0.22
+		_reveal_marker.modulate.a = pulse
 	if not is_local():
 		return
 	shot_cooldown_left = maxf(0.0, shot_cooldown_left - delta)

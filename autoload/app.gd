@@ -21,22 +21,34 @@ const MAPS := {
 	},
 }
 
-## Host-configured match settings. The host's copy is authoritative; relevant
-## values reach clients inside match/phase broadcasts.
-var settings := {
+## Host-configured match settings. The host validates and replicates an
+## immutable snapshot when a round begins.
+const DEFAULT_SETTINGS := {
 	"map_id": DEFAULT_MAP_ID,
 	"seeker_count": 1,
 	"paint_time": 90.0,
 	"seek_time": 180.0,
 	"shot_cooldown": 0.8,
+	"ammo_mode": "per_hider",
 	"ammo_per_hider": 3,
+	"ammo_per_seeker": 9,
+	"survival_pps": 1.0,
+	"bold_pps": 3.0,
+	"kill_points": 100,
+	"survive_bonus": 75,
+	"sweep_bonus": 50,
 }
+var settings := DEFAULT_SETTINGS.duplicate(true)
 
 var status_message := ""  ## shown on the main menu after disconnects/errors
 var last_scores: Array = []
 var last_winner: int = 0
 var in_match := false
 var selected_avatar := AvatarCatalog.DEFAULT_ID
+var selected_role_preference := "none"
+## Stable for this app process so reconnecting to the same lobby retains role
+## history without conflating two players who chose the same display name.
+var lobby_identity := "%d-%d" % [Time.get_ticks_usec(), randi()]
 var cli := {}  ## parsed user args: name/host/join/autostart/fast-phases/quit-after
 
 var _ui_player: AudioStreamPlayer
@@ -94,8 +106,40 @@ func select_map(map_id: String) -> void:
 	settings["map_id"] = map_id if MAPS.has(map_id) else DEFAULT_MAP_ID
 
 
+func reset_match_settings() -> void:
+	settings = DEFAULT_SETTINGS.duplicate(true)
+
+
+## Accept only known keys and clamp every host-controlled rule to its safe UI
+## range. Clients use the same function when receiving the host snapshot.
+func apply_match_settings(source: Dictionary) -> void:
+	var next := DEFAULT_SETTINGS.duplicate(true)
+	var min_phase_time := 0.5 if bool(source.get("_fast_phases", false)) else 15.0
+	next["map_id"] = str(source.get("map_id", DEFAULT_MAP_ID))
+	if not MAPS.has(next["map_id"]):
+		next["map_id"] = DEFAULT_MAP_ID
+	next["seeker_count"] = clampi(int(source.get("seeker_count", 1)), 1, 8)
+	next["paint_time"] = clampf(float(source.get("paint_time", 90.0)), min_phase_time, 300.0)
+	next["seek_time"] = clampf(float(source.get("seek_time", 180.0)), min_phase_time, 600.0)
+	next["shot_cooldown"] = clampf(float(source.get("shot_cooldown", 0.8)), 0.1, 3.0)
+	var ammo_mode := str(source.get("ammo_mode", "per_hider"))
+	next["ammo_mode"] = ammo_mode if ammo_mode in ["per_hider", "fixed"] else "per_hider"
+	next["ammo_per_hider"] = clampi(int(source.get("ammo_per_hider", 3)), 1, 10)
+	next["ammo_per_seeker"] = clampi(int(source.get("ammo_per_seeker", 9)), 1, 50)
+	next["survival_pps"] = clampf(float(source.get("survival_pps", 1.0)), 0.0, 10.0)
+	next["bold_pps"] = clampf(float(source.get("bold_pps", 3.0)), 0.0, 20.0)
+	next["kill_points"] = clampi(int(source.get("kill_points", 100)), 0, 500)
+	next["survive_bonus"] = clampi(int(source.get("survive_bonus", 75)), 0, 500)
+	next["sweep_bonus"] = clampi(int(source.get("sweep_bonus", 50)), 0, 500)
+	settings = next
+
+
 func select_avatar(avatar_id: String) -> void:
 	selected_avatar = AvatarCatalog.normalize(avatar_id)
+
+
+func select_role_preference(preference: String) -> void:
+	selected_role_preference = preference if preference in ["none", "seeker", "hider"] else "none"
 
 
 func selected_map_scene() -> String:
@@ -133,6 +177,7 @@ func _setup_input_map() -> void:
 	_add_key("unstuck", KEY_U)
 	_add_key("toggle_hidden", KEY_H)
 	_add_key("start_seeking_early", KEY_ENTER)
+	_add_key("toggle_results", KEY_TAB)
 	_add_mouse("primary_action", MOUSE_BUTTON_LEFT)   # paint (hider) / shoot (seeker)
 	_add_mouse("eyedrop", MOUSE_BUTTON_RIGHT)
 	_add_mouse("brush_grow", MOUSE_BUTTON_WHEEL_UP)
