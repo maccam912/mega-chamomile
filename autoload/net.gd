@@ -17,12 +17,17 @@ signal shot_fired_sig(shooter_id: int, origin: Vector3, hit_pos: Vector3)
 signal spotted_changed(is_spotted: bool)
 signal scores_updated(scores: Array, winner: int)
 signal player_despawned(peer_id: int)
+signal replay_readiness_changed(ready_ids: Array, player_count: int)
+
+const SessionStateScript := preload("res://scripts/session_state.gd")
 
 var players := {}  ## peer_id -> {"name": String}
 var my_name := "Chamomile"
 
 var _ready_peers := {}
 var _match_ready_peers := {}
+var session: RefCounted = SessionStateScript.new()
+var _accepting_replay_ready := false
 
 
 func _ready() -> void:
@@ -44,6 +49,10 @@ func host_game() -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	players = {1: {"name": my_name}}
+	session.reset([1])
+	_accepting_replay_ready = false
+	App.last_scores.clear()
+	App.last_winner = 0
 	players_changed.emit()
 	return OK
 
@@ -54,6 +63,10 @@ func join_game(ip: String) -> Error:
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
+	session.reset([])
+	_accepting_replay_ready = false
+	App.last_scores.clear()
+	App.last_winner = 0
 	return OK
 
 
@@ -64,6 +77,10 @@ func leave() -> void:
 	players.clear()
 	_ready_peers.clear()
 	_match_ready_peers.clear()
+	session.reset([])
+	_accepting_replay_ready = false
+	App.last_scores.clear()
+	App.last_winner = 0
 
 
 # --- connection lifecycle -------------------------------------------------
@@ -78,11 +95,14 @@ func _on_peer_disconnected(id: int) -> void:
 	if not is_server():
 		return
 	players.erase(id)
+	session.remove_player(id)
 	_ready_peers.erase(id)
 	_match_ready_peers.erase(id)
 	rpc(&"_sync_players", players)
 	players_changed.emit()
 	player_left.emit(id)
+	if _accepting_replay_ready:
+		_broadcast_replay_readiness()
 	_check_barriers()
 
 
@@ -109,6 +129,7 @@ func _register_player(pname: String) -> void:
 		return
 	var id := multiplayer.get_remote_sender_id()
 	players[id] = {"name": pname.substr(0, 20)}
+	session.add_player(id)
 	rpc(&"_sync_players", players)
 	players_changed.emit()
 
@@ -124,7 +145,62 @@ func _sync_players(new_players: Dictionary) -> void:
 ## Host calls this from the lobby to move everyone into the game scene.
 func request_start() -> void:
 	if is_server():
-		rpc(&"_load_game", str(App.settings["map_id"]))
+		_begin_game_load()
+
+
+## Every player opts in from the results screen. Once all connected players
+## are ready, the host may reload the game scene for the next round.
+func begin_replay_readiness() -> void:
+	if not is_server():
+		return
+	_accepting_replay_ready = true
+	session.begin_replay_vote(players.keys())
+	_broadcast_replay_readiness()
+
+
+func request_replay_ready(ready: bool) -> void:
+	if is_server():
+		_set_replay_ready(1, ready)
+	else:
+		rpc_id(1, &"_request_replay_ready", ready)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_replay_ready(ready: bool) -> void:
+	if is_server():
+		_set_replay_ready(multiplayer.get_remote_sender_id(), ready)
+
+
+func _set_replay_ready(id: int, ready: bool) -> void:
+	if not _accepting_replay_ready or not players.has(id):
+		return
+	if session.set_replay_ready(id, ready):
+		_broadcast_replay_readiness()
+
+
+func request_replay_start() -> bool:
+	if not is_server() or not _accepting_replay_ready:
+		return false
+	if session.all_replay_ready(players.keys()):
+		_begin_game_load()
+		return true
+	return false
+
+
+func _begin_game_load() -> void:
+	_accepting_replay_ready = false
+	_ready_peers.clear()
+	_match_ready_peers.clear()
+	rpc(&"_load_game", str(App.settings["map_id"]))
+
+
+func _broadcast_replay_readiness() -> void:
+	rpc(&"_receive_replay_readiness", session.ready_ids(), players.size())
+
+
+@rpc("authority", "call_local", "reliable")
+func _receive_replay_readiness(ready_ids: Array, player_count: int) -> void:
+	replay_readiness_changed.emit(ready_ids, player_count)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -242,6 +318,10 @@ func broadcast_scores(scores: Array, winner: int) -> void:
 	rpc(&"_receive_scores", scores, winner)
 
 
+func record_round_scores(scores: Array) -> Array:
+	return session.record_round(scores) if is_server() else []
+
+
 @rpc("authority", "call_local", "reliable")
 func _receive_scores(scores: Array, winner: int) -> void:
 	App.last_scores = scores
@@ -265,6 +345,7 @@ func broadcast_back_to_lobby() -> void:
 @rpc("authority", "call_local", "reliable")
 func _receive_back_to_lobby() -> void:
 	print("[net] back to lobby")
+	_accepting_replay_ready = false
 	App.in_match = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	App.goto_scene(App.LOBBY_SCENE)

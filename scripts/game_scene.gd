@@ -26,6 +26,7 @@ var _snd_elim: AudioStream
 var _snd_phase: AudioStream
 var _snd_win: AudioStream
 var _snd_lose: AudioStream
+var _replay_loading := false
 
 
 func _ready() -> void:
@@ -42,6 +43,8 @@ func _ready() -> void:
 	hud = preload("res://scripts/hud.gd").new()
 	add_child(hud)
 	hud.ragdoll_toggled.connect(_toggle_local_ragdoll)
+	hud.replay_ready_toggled.connect(Net.request_replay_ready)
+	hud.replay_start_requested.connect(_on_replay_start_requested)
 	pause_menu = preload("res://scripts/pause_menu.gd").new()
 	add_child(pause_menu)
 	pause_menu.opened.connect(_set_ui_blocked.bind(true))
@@ -60,6 +63,7 @@ func _ready() -> void:
 	Net.spotted_changed.connect(_on_spotted_changed)
 	Net.scores_updated.connect(_on_scores_updated)
 	Net.player_despawned.connect(_on_player_despawned)
+	Net.replay_readiness_changed.connect(_on_replay_readiness_changed)
 
 	if Net.is_server():
 		match_state = MatchState.new()
@@ -120,7 +124,9 @@ func _server_on_phase_entered(phase: int) -> void:
 				extra["ammo"] = match_state.ammo_of(match_state.seekers()[0])
 		MatchState.Phase.RESULTS:
 			duration = match_state.cfg["results_time"]
-			Net.broadcast_scores(match_state.scores_snapshot(), match_state.winner)
+			var scores := Net.record_round_scores(match_state.scores_snapshot())
+			Net.broadcast_scores(scores, match_state.winner)
+			Net.begin_replay_readiness()
 		MatchState.Phase.DONE:
 			Net.broadcast_back_to_lobby()
 			return
@@ -138,7 +144,7 @@ func _server_on_player_left(id: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if match_state == null:
+	if match_state == null or _replay_loading:
 		return
 	match_state.tick(delta)
 	if match_state.phase == MatchState.Phase.SEEK:
@@ -304,13 +310,23 @@ func _on_spotted_changed(spotted: bool) -> void:
 
 func _on_scores_updated(scores: Array, winner: int) -> void:
 	print("[game] results: winner=%s scores=%s" % [MatchState.Team.keys()[winner], scores])
-	hud.show_results(scores, winner, multiplayer.get_unique_id())
+	hud.show_results(scores, winner, multiplayer.get_unique_id(), Net.is_server())
 	var i_won := (
 		(winner == MatchState.Team.HIDERS and my_role == MatchState.Role.HIDER)
 		or (winner == MatchState.Team.SEEKERS and my_role == MatchState.Role.SEEKER)
 	)
 	_play2d(_snd_win if i_won else _snd_lose)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _on_replay_readiness_changed(ready_ids: Array, player_count: int) -> void:
+	hud.set_replay_readiness(ready_ids, multiplayer.get_unique_id(), player_count)
+
+
+func _on_replay_start_requested() -> void:
+	# Stop the old results timer before scheduling the same-scene reload. This
+	# prevents its DONE transition from racing the replay into the lobby.
+	_replay_loading = Net.request_replay_start()
 
 
 func _on_player_despawned(peer_id: int) -> void:

@@ -6,6 +6,8 @@ const MOVE_HINT := "F paint mode    wheel brush size"
 const PAINT_HINT := "LMB paint yourself    RMB sample color    MMB drag orbit    F done"
 
 signal ragdoll_toggled
+signal replay_ready_toggled(ready: bool)
+signal replay_start_requested
 
 var _phase_label: Label
 var _timer_label: Label
@@ -26,6 +28,10 @@ var _cross: ColorRect
 var _paint_mode_label: Label
 var _brush_ring: Control
 var _ragdoll_button: Button
+var _replay_ready_button: CheckButton
+var _replay_start_button: Button
+var _replay_status: Label
+var _is_replay_host := false
 
 var _time_left := 0.0
 var _counting := false
@@ -332,10 +338,11 @@ func show_banner(text: String, color := Color.WHITE) -> void:
 	tw.tween_callback(func() -> void: _center_banner.visible = false)
 
 
-func show_results(scores: Array, winner: int, my_id: int) -> void:
+func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> void:
 	for c in _results.get_children():
 		c.queue_free()
 	_results.visible = true
+	_is_replay_host = is_host
 
 	var dark := ColorRect.new()
 	dark.color = Color(0.05, 0.05, 0.08, 0.85)
@@ -347,7 +354,7 @@ func show_results(scores: Array, winner: int, my_id: int) -> void:
 	_results.add_child(center)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
-	box.custom_minimum_size = Vector2(520, 0)
+	box.custom_minimum_size = Vector2(640, 0)
 	center.add_child(box)
 
 	var banner := Label.new()
@@ -368,7 +375,10 @@ func show_results(scores: Array, winner: int, my_id: int) -> void:
 		var role_txt := "seeker" if row["role"] == MatchState.Role.SEEKER else "hider"
 		var state := "" if row["alive"] else "  [eliminated]"
 		var me := "  <- you" if row["id"] == my_id else ""
-		l.text = "%-18s %-7s %5d%s%s" % [row["name"], role_txt, row["score"], state, me]
+		var round_score := int(row.get("round_score", row["score"]))
+		var session_score := int(row.get("session_score", round_score))
+		l.text = "%-18s %-7s round %4d   session %5d%s%s" % [
+			row["name"], role_txt, round_score, session_score, state, me]
 		l.add_theme_font_size_override("font_size", 20)
 		box.add_child(l)
 		var detail := Label.new()
@@ -377,14 +387,71 @@ func show_results(scores: Array, winner: int, my_id: int) -> void:
 		detail.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
 		box.add_child(detail)
 
+	var divider := HSeparator.new()
+	box.add_child(divider)
+
+	_replay_ready_button = CheckButton.new()
+	_replay_ready_button.text = "READY FOR NEXT ROUND"
+	_replay_ready_button.custom_minimum_size = Vector2(0, 42)
+	_replay_ready_button.set_meta("interactive_hud", true)
+	_replay_ready_button.toggled.connect(func(ready: bool) -> void:
+		App.play_ui_click()
+		replay_ready_toggled.emit(ready))
+	box.add_child(_replay_ready_button)
+
+	_replay_status = Label.new()
+	_replay_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_replay_status.add_theme_font_size_override("font_size", 14)
+	_replay_status.add_theme_color_override("font_color", Color("e0b34d"))
+	_replay_status.text = "Confirm when you're ready to play again."
+	box.add_child(_replay_status)
+
+	if is_host:
+		_replay_start_button = Button.new()
+		_replay_start_button.text = "START NEXT ROUND"
+		_replay_start_button.custom_minimum_size = Vector2(0, 48)
+		_replay_start_button.disabled = true
+		_replay_start_button.set_meta("interactive_hud", true)
+		_replay_start_button.pressed.connect(func() -> void:
+			App.play_ui_click()
+			_replay_start_button.disabled = true
+			_replay_status.text = "Starting next round..."
+			replay_start_requested.emit())
+		box.add_child(_replay_start_button)
+	else:
+		_replay_start_button = null
+
 	var back := Label.new()
-	back.text = "back to lobby shortly..."
+	back.text = "If not everyone readies up, the lobby returns shortly."
 	back.add_theme_font_size_override("font_size", 14)
 	back.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	back.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(back)
 
 	_pass_mouse_through(_results)
+	_replay_ready_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	if _replay_start_button != null:
+		_replay_start_button.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+func set_replay_readiness(ready_ids: Array, my_id: int, player_count: int) -> void:
+	if not is_instance_valid(_replay_ready_button) or not is_instance_valid(_replay_status):
+		return
+	var me_ready := ready_ids.has(my_id)
+	_replay_ready_button.set_pressed_no_signal(me_ready)
+	_replay_ready_button.text = "READY — CLICK TO CANCEL" if me_ready else "READY FOR NEXT ROUND"
+	var ready_count := ready_ids.size()
+	var everyone_ready := player_count > 0 and ready_count == player_count
+	if everyone_ready:
+		_replay_status.text = (
+			"Everyone is ready — start when you are." if _is_replay_host
+			else "Everyone is ready — waiting for the host.")
+	elif me_ready:
+		_replay_status.text = "You're ready — waiting for others (%d / %d)." % [ready_count, player_count]
+	else:
+		_replay_status.text = "%d / %d ready. Confirm when you're ready." % [ready_count, player_count]
+	if is_instance_valid(_replay_start_button):
+		_replay_start_button.disabled = not everyone_ready
 
 
 ## One line per player explaining where the total came from.

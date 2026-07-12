@@ -4,6 +4,7 @@ extends SceneTree
 ## Exits 0 on success, 1 on any failure.
 
 const MatchStateScript := preload("res://scripts/match_state.gd")
+const SessionStateScript := preload("res://scripts/session_state.gd")
 const PaintableBodyScript := preload("res://scripts/paintable_body.gd")
 const AppScript := preload("res://autoload/app.gd")
 
@@ -18,6 +19,7 @@ func _initialize() -> void:
 	test_ammo_and_cooldown()
 	test_bold_scoring()
 	test_score_breakdown()
+	test_session_scoring_and_replay()
 	test_disconnect_wins()
 	test_solo_mode()
 	test_paint_splat()
@@ -183,6 +185,35 @@ func test_score_breakdown() -> void:
 			check(row["bonus"] == 0 and not row["alive"], "found hider gets no bonus")
 
 
+func test_session_scoring_and_replay() -> void:
+	print("session scoring + replay readiness:")
+	var session: RefCounted = SessionStateScript.new()
+	session.reset([1, 2])
+	var first: Array = session.record_round([
+		{"id": 1, "score": 20},
+		{"id": 2, "score": 10},
+	])
+	check(first[0]["round_score"] == 20 and first[0]["session_score"] == 20,
+			"first results include round and session totals")
+	var second: Array = session.record_round([
+		{"id": 1, "score": 5},
+		{"id": 2, "score": 30},
+	])
+	check(second[0]["id"] == 2 and second[0]["session_score"] == 40,
+			"later rounds accumulate and sort by session total")
+	check(second[1]["session_score"] == 25 and session.rounds_played == 2,
+			"session total preserves earlier round points")
+
+	session.begin_replay_vote([1, 2])
+	check(not session.all_replay_ready([1, 2]), "replay begins with everyone unready")
+	check(session.set_replay_ready(1, true), "connected player can ready up")
+	check(not session.all_replay_ready([1, 2]), "one ready player cannot start a full replay")
+	session.set_replay_ready(2, true)
+	check(session.all_replay_ready([1, 2]), "replay unlocks when every player is ready")
+	session.remove_player(2)
+	check(not session.totals.has(2), "disconnect removes score identity instead of allowing inheritance")
+
+
 func test_disconnect_wins() -> void:
 	print("disconnect handling:")
 	var ms := _make(3, 1)
@@ -337,11 +368,17 @@ func test_hud_passes_mouse_through() -> void:
 		{"id": 2, "name": "Seeker", "role": MatchStateScript.Role.SEEKER, "score": 100,
 			"survival": 0, "bold": 0, "kills": 1, "kill_points": 100, "bonus": 0, "alive": true},
 	]
-	hud.show_results(rows, MatchStateScript.Team.HIDERS, 1)
+	hud.show_results(rows, MatchStateScript.Team.HIDERS, 1, true)
 	check(hud._score_breakdown(rows[0]) == "survival +10   bold +3   survived +75",
 			"hider results row explains its score")
 	check(hud._score_breakdown(rows[1]) == "found 1  +100",
 			"seeker results row explains its score")
+	check(hud._replay_ready_button != null and hud._replay_start_button != null,
+			"results offer replay readiness and a host start action")
+	hud.set_replay_readiness([1], 1, 2)
+	check(hud._replay_start_button.disabled, "host cannot replay before everyone opts in")
+	hud.set_replay_readiness([1, 2], 1, 2)
+	check(not hud._replay_start_button.disabled, "host can replay once everyone opts in")
 	bad.clear()
 	_collect_stop_controls(hud, bad)
 	check(bad.is_empty(), "results overlay ignores mouse too (offenders: %s)" % [bad])

@@ -3,7 +3,27 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: first backlog slices shipped (session 4, 2026-07-12)
+## Status: quick replay + session scoring shipped (session 5, 2026-07-12)
+
+### Session 5: consecutive-round foundation (`ROUND-01`, `SCORE-02`)
+- **Quick replay from results** (`ROUND-01`): every player gets a reversible
+  Ready for Next Round confirmation. The host's Start Next Round button unlocks
+  only when every connected player has opted in, then reloads the game scene
+  without disconnecting the lobby. A replay-loading guard prevents the old
+  RESULTS timer from racing the new scene back to the lobby.
+- **Cumulative session scoring** (`SCORE-02`): new pure `SessionState` tracks
+  integer totals across round scene reloads. Results show both round and session
+  points and sort by the cumulative total. Leaving/new host/new join resets the
+  session; a disconnected peer's identity and score are removed, so a new peer
+  cannot inherit them accidentally.
+- The existing fresh-scene setup resets round-only paint, bodies, roles, ammo,
+  eliminations, spawns, and timers. Role assignment runs again through the
+  current random allocator, leaving the session model ready for `ROLE-01`.
+- Verified: 121 headless checks pass; two-instance ENet E2E delivered identical
+  round/session score fields to host and guest and returned cleanly to lobby;
+  deterministic 1280x720 render review confirmed the results/readiness layout.
+
+## Previous status: first backlog slices shipped (session 4, 2026-07-12)
 
 ### Session 4: lobby match settings + results score breakdown (docs/TODO.md slices)
 - **Fixed persistent backward-facing movement** (`BUG-01`): the travel-to-yaw

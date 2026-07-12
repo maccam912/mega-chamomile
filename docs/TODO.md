@@ -6,6 +6,12 @@ requests. It is planning documentation; items are unimplemented unless marked
 
 **Shipped so far (2026-07-12):**
 
+- `ROUND-01` **SHIPPED**: every player can ready up from results; once all
+  connected players opt in, the host can immediately reload the game scene for
+  another round without breaking up the lobby.
+- `SCORE-02` **SHIPPED**: results show current-round and cumulative session
+  totals. Totals survive replay and ordinary returns to the same lobby, and
+  reset when the player leaves or a new host/join session begins.
 - `SETTINGS-01` slice: hiding time, seeking time, and ammo per hider are
   host-editable in the lobby (`scripts/lobby.gd` `_add_setting_spin`).
 - `SCORE-01` slice: results show a per-player breakdown (survival, bold,
@@ -40,9 +46,9 @@ after investigation, especially for bugs.
 | `NET-01` | M | High | Lobby and main-menu UI | LAN discovery can advertise existing ENet hosts and present them in a join list while retaining manual IP as a fallback. |
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
 | `UI-02` | M | High | `UI-01`, `BRAND-01` | A focused main-menu layout, styling, motion, and audio pass without changing game rules. |
-| `SCORE-02` | M | High | `ROUND-01`, `ROLE-01` | Needs session-lifetime player identity and score state. |
+| `SCORE-02` | **SHIPPED** | High | `ROUND-01`, `ROLE-01` | Session totals use live peer identity and survive round scene reloads. |
 | `MOVE-01` | **SHIPPED** | High | Movement regression tests | Continuous climbing requires wall contact; hold-to-confirm unstuck has a cooldown and is disabled while frozen. |
-| `ROUND-01` | M–L | High | `ROLE-01`, `SCORE-02` | Replay UI is small; reliably resetting a round while preserving session state is the larger part. |
+| `ROUND-01` | **SHIPPED** | High | `ROLE-01`, `SCORE-02` | Results readiness gates a host-controlled same-session scene reload. |
 | `ROLE-01` | L | High | `ROUND-01`, `SCORE-02` | Adds persistent history, preference UI, a fairness algorithm, replication, and many rule tests. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
@@ -122,11 +128,17 @@ Wall contact is the eligibility condition; open-air hovering is not allowed.
 
 ## P1 — Make consecutive rounds easy and fair
 
-### ROUND-01: Quick replay from results
+### ROUND-01: Quick replay from results — **SHIPPED**
 
 **Requested behavior:** Add a prominent **Play Again** button to the results
 screen so the same lobby can immediately start another round without making
 everyone reconnect.
+
+**Resolution:** Results now give every connected player a reversible
+**Ready for Next Round** confirmation. The host's **Start Next Round** action
+unlocks when everyone is ready and reloads the game scene directly. The new
+scene reconstructs all round-only bodies, paint, roles, spawns, timers, ammo,
+and eliminations while the `Net` autoload preserves lobby-session state.
 
 **Acceptance criteria:**
 
@@ -294,10 +306,16 @@ request should make both components explicit in the results and tuneable via
   outcome, and total—not only a single opaque number.
 - Server-authoritative scoring remains stable across different frame rates.
 
-### SCORE-02: Carry a session scoreboard across rounds
+### SCORE-02: Carry a session scoreboard across rounds — **SHIPPED**
 
 **Requested behavior:** Keep cumulative player scores while the lobby plays
 successive rounds.
+
+**Resolution:** A pure `SessionState` owned by `Net` records authoritative
+round snapshots and adds `round_score` and `session_score` to each replicated
+results row. Live peer IDs are the session identity: disconnecting forfeits
+that identity and its total, while reconnecting starts at zero under a new peer
+ID. Leaving or starting a new host/join session resets all totals.
 
 **Acceptance criteria:**
 
