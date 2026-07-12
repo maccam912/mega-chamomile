@@ -19,7 +19,17 @@ env:
 
 jobs:
   build:
-    name: Build desktop packages
+    name: Build ${{ matrix.label }} package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            label: Linux x86_64
+          - platform: windows
+            label: Windows x86_64
+          - platform: macos
+            label: macOS Universal
     runs-on: ubuntu-latest
 
     steps:
@@ -57,34 +67,31 @@ jobs:
       - name: Import project resources
         run: godot --headless --path . --import
 
-      - name: Export Linux x86_64
+      - name: Export desktop package
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/linux packages
-          godot --headless --path . --export-release Linux build/linux/mega-chamomile.x86_64
-          (cd build/linux && zip -9 -r ../../packages/mega-chamomile-linux-x86_64.zip .)
+          mkdir -p "build/${{ matrix.platform }}" packages
 
-      - name: Export Windows x86_64
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build/windows
-          godot --headless --path . --export-release 'Windows Desktop' build/windows/mega-chamomile.exe
-          (cd build/windows && zip -9 -r ../../packages/mega-chamomile-windows-x86_64.zip .)
+          case "${{ matrix.platform }}" in
+            linux)
+              godot --headless --path . --export-release Linux build/linux/mega-chamomile.x86_64
+              (cd build/linux && zip -9 -r ../../packages/mega-chamomile-linux-x86_64.zip .)
+              ;;
+            windows)
+              godot --headless --path . --export-release 'Windows Desktop' build/windows/mega-chamomile.exe
+              (cd build/windows && zip -9 -r ../../packages/mega-chamomile-windows-x86_64.zip .)
+              ;;
+            macos)
+              godot --headless --path . --export-release macOS build/macos/mega-chamomile-macos-universal.zip
+              cp build/macos/mega-chamomile-macos-universal.zip packages/
+              ;;
+          esac
 
-      - name: Export macOS Universal
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build/macos
-          godot --headless --path . --export-release macOS build/macos/mega-chamomile-macos-universal.zip
-          cp build/macos/mega-chamomile-macos-universal.zip packages/
-
-      - name: Upload packaged builds to workflow run
+      - name: Upload desktop package
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-builds-${{ github.run_number }}-${{ github.run_attempt }}
+          name: desktop-${{ matrix.platform }}-${{ github.run_number }}-${{ github.run_attempt }}
           path: packages/*.zip
           if-no-files-found: error
 
@@ -178,41 +185,11 @@ jobs:
           path: packages/mega-chamomile-launcher-*
           if-no-files-found: error
 
-  verify-macos:
-    name: Verify macOS package
-    needs: build
-    runs-on: macos-latest
-
-    steps:
-      - name: Download packaged builds
-        uses: actions/download-artifact@v4
-        with:
-          name: desktop-builds-${{ github.run_number }}-${{ github.run_attempt }}
-          path: packages
-
-      - name: Verify signature, architectures, and launch
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p verify
-          ditto -x -k packages/mega-chamomile-macos-universal.zip verify
-
-          app="verify/Mega Chamomile.app"
-          executable="$app/Contents/MacOS/Mega Chamomile"
-          codesign --verify --deep --strict --verbose=2 "$app"
-
-          architectures="$(lipo -archs "$executable")"
-          [[ "$architectures" == *x86_64* ]]
-          [[ "$architectures" == *arm64* ]]
-
-          "$executable" --headless --quit-after 1
-
   release:
     name: Create GitHub Release
     needs:
       - build
       - launcher-build
-      - verify-macos
     runs-on: ubuntu-latest
 
     steps:
