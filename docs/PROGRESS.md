@@ -6,6 +6,10 @@ build is so a fresh session can pick up instantly.
 ## Status: first backlog slices shipped (session 4, 2026-07-12)
 
 ### Session 4: lobby match settings + results score breakdown (docs/TODO.md slices)
+- **Fixed persistent backward-facing movement** (`BUG-01`): the travel-to-yaw
+  calculation added `PI`, so the character model faced exactly opposite its
+  camera-relative velocity. The extra half-turn is gone; a regression test
+  verifies forward, backward, left, and right travel headings.
 - **Lobby settings** (`SETTINGS-01` slices): host can now set hiding time
   (15–300s), seeking time (30–600s), and ammo per hider (1–10) next to the
   existing seeker count and map pickers. One `_add_setting_spin()` helper in
@@ -21,8 +25,8 @@ build is so a fresh session can pick up instantly.
   the server broadcasts scores *then* the phase change, and `hud.on_phase()`
   unconditionally hid `_results`. Now it only hides it for non-RESULTS phases;
   regression-tested.
-- Verified: 96 headless checks pass (new: breakdown sums to total, component
-  values, breakdown strings, results-overlay survival); 2-instance ENet E2E
+- Verified: 100 headless checks pass (new: all four cardinal travel headings,
+  breakdown sums to total, component values, breakdown strings, results-overlay survival); 2-instance ENet E2E
   clean with breakdown fields replicated; windowed screenshots confirm the new
   lobby rows and the results overlay with breakdown.
 

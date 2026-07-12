@@ -13,6 +13,8 @@ requests. It is planning documentation; items are unimplemented unless marked
   components and derives the total from them.
 - Fix found along the way: the RESULTS scoreboard was being hidden by the
   phase broadcast that follows the score broadcast (`hud.gd` `on_phase`).
+- `BUG-01` **SHIPPED**: removed the extra half-turn from movement yaw, so the
+  character model now faces its travel direction instead of walking backward.
 
 ## Effort and grouping at a glance
 
@@ -25,11 +27,13 @@ after investigation, especially for bugs.
 | ID | Effort | Confidence | Best grouping | Why |
 | --- | --- | --- | --- | --- |
 | `BRAND-01` | XS | High | Standalone | Mostly a finite rename/search pass. |
-| `BUG-01` | S | Medium | `AVATAR-01` camera/aim verification | Likely spawn/model yaw alignment, but the root cause still needs reproduction. |
+| `BUG-01` | **SHIPPED** | High | Movement regression test | The movement yaw included an extra half-turn, making the model face opposite its travel direction. |
 | `UI-01` | S–M | High | `UI-02`, `SETTINGS-01` | Central display scaling and theme sizing should address most Retina/Windows inconsistency, followed by a screen audit. |
 | `REVEAL-01` | S pose preservation / M full reveal | Medium | `ROUND-01`, results presentation | Keeping ragdoll state should be small; synchronized highlights and seeker-only results movement cross gameplay and rendering systems. |
 | `SCORE-01` | S–M | High | `SCORE-02`, `SETTINGS-01` | The core survival and line-of-sight scoring already exists; breakdowns and configuration are the new work. |
 | `HIDE-01` | M | High | `ROUND-01`, `CAMERA-01` | A contained ready-state and phase-transition feature. |
+| `PAINT-01` | S–M | Medium | `AVATAR-01`, `AVATAR-02` | Painting must use a through-body brush volume instead of limiting strokes to camera-visible surfaces. |
+| `NET-01` | M | High | Lobby and main-menu UI | LAN discovery can advertise existing ENet hosts and present them in a join list while retaining manual IP as a fallback. |
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
 | `UI-02` | M | High | `UI-01`, `BRAND-01` | A focused main-menu layout, styling, motion, and audio pass without changing game rules. |
 | `SCORE-02` | M | High | `ROUND-01`, `ROLE-01` | Needs session-lifetime player identity and score state. |
@@ -38,6 +42,7 @@ after investigation, especially for bugs.
 | `ROLE-01` | L | High | `ROUND-01`, `SCORE-02` | Adds persistent history, preference UI, a fairness algorithm, replication, and many rule tests. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
+| `NET-02` | M feasibility spike / XL migration | Low | `NET-01`, networking architecture | Iroh may enable identity-based connections, NAT traversal, and relay fallback, but replacing Godot ENet requires an integration prototype first. |
 | `MODE-01` | XL | High | Build after reusable round/settings state | Requires a second authoritative game loop, ghost state, tag handoffs, UI, scoring, and edge-case tests. |
 | `AVATAR-02` | XL | Medium | `AVATAR-01`, painting/ragdoll architecture | Distinct animal silhouettes require new paintable bodies, physics rigs, hitboxes, cameras, and balance rules. |
 
@@ -47,8 +52,8 @@ These are good candidates when a small, independent improvement is wanted:
 
 1. `BRAND-01` — easiest overall, though it creates broad file churn and is best
    done when the name is considered final.
-2. Investigate and fix `BUG-01` — probably small if reproduction confirms one
-   spawn/model orientation mismatch.
+2. **SHIPPED** — `BUG-01`: characters now face their travel direction instead
+   of walking backward.
 3. Establish consistent UI scaling for `UI-01`, then audit the existing screens
    at representative Retina and Windows resolutions.
 4. Preserve surviving hiders' final ragdoll poses when the seek timer expires —
@@ -68,20 +73,24 @@ body. Testing a larger map first is the lower-risk version of the idea.
 
 ## P0 — Fix movement and orientation blockers
 
-### BUG-01: Seeker starts or appears facing backwards
+### BUG-01: Character faces backwards while moving — **SHIPPED**
 
-**Problem:** The seeker can enter the round facing the wrong direction.
+**Problem:** Pressing forward moved the player camera-forward, but the character
+model permanently faced the opposite direction and appeared to walk backward.
 
-**Requested behavior:** A seeker should face the intended direction when the
-round starts and when the hiding area opens. The character model, camera, aim
-direction, and movement-forward direction should agree.
+**Resolution:** The travel-to-yaw calculation added `PI`, rotating the character
+root 180 degrees away from its velocity. Removing that half-turn aligns the
+model with travel while the existing camera counter-rotation keeps the view
+stable.
 
 **Acceptance criteria:**
 
-- Every seeker spawn defines a deliberate initial facing direction.
-- The local camera and remote character model show the same forward direction.
-- The first shot travels toward the center of the seeker's crosshair.
-- This works for every map and for multiple seekers.
+- Forward, backward, left, and right travel all turn the character toward the
+  direction of movement.
+- Camera-relative controls and the camera's world yaw remain unchanged.
+- Remote players receive the corrected root yaw through existing transform
+  synchronization.
+- A regression test covers all four cardinal travel directions.
 
 ### MOVE-01: Recover from walls and climb or float upward
 
@@ -201,6 +210,62 @@ skip the remaining countdown and begin seeking.
   seeking does not begin silently.
 - The normal countdown still starts seeking if players never mark themselves
   hidden.
+
+## P1 — Paint through the complete character
+
+### PAINT-01: Paint front and back vertices in one stroke
+
+**Problem:** Painting currently affects only the visible face of the character,
+leaving vertices on the back side unchanged unless the player rotates to expose
+them.
+
+**Requested behavior:** Treat the brush footprint as passing all the way through
+the character. A stroke should paint every paintable vertex within that
+through-body volume, including occluded and back-facing vertices, rather than
+stopping at the first visible surface.
+
+**Acceptance criteria:**
+
+- One stroke paints matching vertices on both the visible and hidden sides of
+  the character.
+- Back-facing or depth-occluded vertices do not require rotating the character
+  toward the camera before they can be painted.
+- The through-body behavior preserves the configured brush radius, falloff, and
+  sampled color.
+- A stroke affects only vertices inside its brush footprint and does not spill
+  across unrelated parts solely because they are hidden from view.
+- The resulting paint state remains synchronized for all players and survives
+  the same phase transitions as existing paint.
+- Add coverage for front-to-back strokes on the humanoid and include this
+  behavior in the paintability contract for future avatar bodies.
+
+## P1 — Make LAN games easy to join
+
+### NET-01: Discover hosted games on the local network
+
+**Problem:** Joining a nearby game currently requires finding and typing the
+host's LAN IP address every time.
+
+**Requested behavior:** Automatically discover compatible games advertised on
+the local network and show them in a selectable join list. Joining a discovered
+game should reuse the existing ENet connection flow; manual IP entry remains
+available as a fallback.
+
+**Acceptance criteria:**
+
+- A host advertises its lobby on the LAN while it is available to join.
+- The join screen continuously discovers and lists compatible local lobbies
+  without requiring an internet service.
+- Each result shows enough information to distinguish games, including host or
+  lobby name, player count, and compatibility/version status.
+- Selecting a result fills in the connection details and joins through the
+  existing flow without requiring the player to type an IP address.
+- Multiple hosts can appear at once, duplicate advertisements are coalesced,
+  and stale or closed lobbies disappear promptly.
+- Discovery works on supported desktop platforms and fails gracefully when
+  multicast/broadcast traffic is blocked by the network or local firewall.
+- Manual IP entry remains available for diagnostics and networks where
+  automatic discovery cannot work.
 
 ## P1 — Multi-round scoring
 
@@ -359,6 +424,47 @@ switch back to their body. With multiple seekers, they can cycle among them.
 **Fair-play note:** This gives a living hider privileged seeker information.
 Limit it to casual/private games or expose it as a host setting if playtests
 show that voice chat makes it exploitable.
+
+## P3 — Explore easier internet connections
+
+### NET-02: Investigate Iroh for easier internet connections
+
+**Concept:** Run a focused feasibility spike on using the
+[Iroh networking stack](https://docs.iroh.computer/what-is-iroh) so players
+could connect by a stable endpoint identity or invitation instead of exchanging
+IP addresses. Evaluate its discovery, authenticated QUIC connections, NAT
+traversal, and relay fallback without assuming it can directly replace Godot's
+current `ENetMultiplayerPeer`.
+
+**Investigation goals:**
+
+- Prototype the smallest viable Godot integration, comparing GDExtension,
+  `iroh-ffi`, and a sidecar process rather than committing to an architecture
+  up front.
+- Determine whether Iroh datagrams or streams can back Godot's high-level
+  multiplayer/RPC model, or whether adopting it would require a separate game
+  transport and replication layer.
+- Demonstrate two peers discovering or exchanging endpoint information,
+  connecting across different networks, and completing a minimal gameplay
+  message round trip.
+- Test direct connections, NAT traversal, network changes, and relay fallback;
+  record latency, bandwidth, reconnection behavior, and failure messages.
+- Define the player-facing connection flow, such as short invitation codes,
+  shareable tickets, or a friends/lobby discovery service, without exposing raw
+  endpoint details unnecessarily.
+- Evaluate export size, supported platforms, Rust/native build maintenance,
+  relay hosting and operating cost, service availability, abuse controls, and
+  security implications.
+- Keep `NET-01` independent: LAN discovery should still work without Iroh or an
+  internet connection.
+- Do not replace the current ENet implementation until a prototype proves that
+  hosting, joining, replication, disconnect handling, and representative
+  gameplay traffic work reliably in exported builds.
+
+**Reference:** Iroh currently documents endpoint-ID-based discovery, direct
+QUIC connections with NAT traversal, and encrypted relay fallback. These are
+promising capabilities to evaluate, not evidence that it already integrates
+with Godot or this game's authoritative multiplayer model.
 
 ## P3 — Long-term avatar variety
 

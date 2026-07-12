@@ -322,7 +322,7 @@ func _local_move(delta: float) -> void:
 		# The body turns to face travel direction. The camera rig is a child of
 		# this rotating root, so counter-rotate it by the same delta — otherwise
 		# the view spins with the body and feeds back into the move direction.
-		var new_yaw := lerp_angle(rotation.y, atan2(-dir.x, -dir.z) + PI, minf(1.0, 10.0 * delta))
+		var new_yaw := lerp_angle(rotation.y, yaw_for_travel(dir), minf(1.0, 10.0 * delta))
 		_rig.rotation.y -= wrapf(new_yaw - rotation.y, -PI, PI)
 		rotation.y = new_yaw
 	else:
@@ -330,6 +330,14 @@ func _local_move(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, 0, SPEED)
 	move_and_slide()
 	_local_footsteps(delta)
+
+
+## Character meshes and the gun are authored facing Godot's -Z forward axis.
+## Convert horizontal travel to a root yaw without adding a half-turn, which
+## would make the character appear to walk backward while movement stayed
+## camera-relative.
+static func yaw_for_travel(dir: Vector3) -> float:
+	return atan2(-dir.x, -dir.z)
 
 
 func _fly_move(delta: float) -> void:

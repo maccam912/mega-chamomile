@@ -24,6 +24,7 @@ func _initialize() -> void:
 	test_paint_stroke()
 	test_articulated_ragdoll()
 	test_hud_passes_mouse_through()
+	test_travel_facing()
 	test_fall_recovery()
 	test_map_selection()
 
@@ -347,6 +348,16 @@ func _collect_stop_controls(node: Node, bad: Array) -> void:
 		bad.append(node.name)
 	for child in node.get_children():
 		_collect_stop_controls(child, bad)
+
+
+func test_travel_facing() -> void:
+	print("travel facing:")
+	var player_script := load("res://scripts/player.gd")
+	for dir: Vector3 in [Vector3.FORWARD, Vector3.BACK, Vector3.LEFT, Vector3.RIGHT]:
+		var yaw: float = player_script.yaw_for_travel(dir)
+		var facing := Basis(Vector3.UP, yaw) * Vector3.FORWARD
+		check(facing.is_equal_approx(dir),
+				"character faces travel direction %s (got %s)" % [dir, facing])
 
 
 func test_fall_recovery() -> void:
