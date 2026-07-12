@@ -3,7 +3,30 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: paint feel + camera orbit fixes after second playtest (session 3, 2026-07-11)
+## Status: first backlog slices shipped (session 4, 2026-07-12)
+
+### Session 4: lobby match settings + results score breakdown (docs/TODO.md slices)
+- **Lobby settings** (`SETTINGS-01` slices): host can now set hiding time
+  (15–300s), seeking time (30–600s), and ammo per hider (1–10) next to the
+  existing seeker count and map pickers. One `_add_setting_spin()` helper in
+  lobby.gd binds a SpinBox to an App.settings key; initial value is set with
+  `set_value_no_signal` so out-of-range CLI overrides (`--fast-phases` 4s/6s)
+  display clamped but are never written back.
+- **Results breakdown** (`SCORE-01` slice): MatchState players now accumulate
+  `survival`, `bold`, `kills`, `bonus` separately; the total is *derived*
+  (`score_of()`) so breakdown and total can't drift. `scores_snapshot()` rows
+  carry the components; hud.gd renders a small gray line under each player
+  ("survival +10   bold +3   survived +75" / "found 2  +200   sweep bonus +50").
+- **Bug found & fixed**: the RESULTS scoreboard was invisible in real matches —
+  the server broadcasts scores *then* the phase change, and `hud.on_phase()`
+  unconditionally hid `_results`. Now it only hides it for non-RESULTS phases;
+  regression-tested.
+- Verified: 96 headless checks pass (new: breakdown sums to total, component
+  values, breakdown strings, results-overlay survival); 2-instance ENet E2E
+  clean with breakdown fields replicated; windowed screenshots confirm the new
+  lobby rows and the results overlay with breakdown.
+
+## Previous status: paint feel + camera orbit fixes after second playtest (session 3, 2026-07-11)
 
 ### Session 3: paint strokes, brush ring, orbit regression
 - **Camera orbit while captured was dead** (playtest: "mouse captured but view

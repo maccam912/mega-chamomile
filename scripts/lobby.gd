@@ -57,19 +57,10 @@ func _build_ui() -> void:
 	panel.add_child(_player_list)
 
 	if Net.is_server():
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
-		box.add_child(row)
-		var lbl := Label.new()
-		lbl.text = "Seekers:"
-		row.add_child(lbl)
-		_seeker_spin = SpinBox.new()
-		_seeker_spin.min_value = 1
-		_seeker_spin.max_value = 8
-		_seeker_spin.value = App.settings["seeker_count"]
-		_seeker_spin.value_changed.connect(
-			func(v: float) -> void: App.settings["seeker_count"] = int(v))
-		row.add_child(_seeker_spin)
+		_seeker_spin = _add_setting_spin(box, "Seekers:", "seeker_count", 1, 8, 1)
+		_add_setting_spin(box, "Hiding time:", "paint_time", 15, 300, 5, "s")
+		_add_setting_spin(box, "Seeking time:", "seek_time", 30, 600, 15, "s")
+		_add_setting_spin(box, "Ammo per hider:", "ammo_per_hider", 1, 10, 1)
 
 		var map_row := HBoxContainer.new()
 		map_row.add_theme_constant_override("separation", 10)
@@ -116,6 +107,31 @@ func _build_ui() -> void:
 		last.add_theme_color_override("font_color", Color("8a92a6"))
 		last.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		box.add_child(last)
+
+
+## Labeled SpinBox row bound to one App.settings key. The initial value is set
+## without emitting value_changed so CLI overrides outside the spinner's range
+## (e.g. --fast-phases) are displayed clamped but never written back.
+func _add_setting_spin(box: VBoxContainer, text: String, key: String,
+		min_v: float, max_v: float, step: float, suffix := "") -> SpinBox:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	box.add_child(row)
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(lbl)
+	var spin := SpinBox.new()
+	spin.min_value = min_v
+	spin.max_value = max_v
+	spin.step = step
+	spin.suffix = suffix
+	spin.set_value_no_signal(float(App.settings[key]))
+	var as_int: bool = App.settings[key] is int
+	spin.value_changed.connect(func(v: float) -> void:
+		App.settings[key] = int(v) if as_int else v)
+	row.add_child(spin)
+	return spin
 
 
 func _refresh() -> void:

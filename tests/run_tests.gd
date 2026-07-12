@@ -17,6 +17,7 @@ func _initialize() -> void:
 	test_sweep_seekers_win()
 	test_ammo_and_cooldown()
 	test_bold_scoring()
+	test_score_breakdown()
 	test_disconnect_wins()
 	test_solo_mode()
 	test_paint_splat()
@@ -140,9 +141,43 @@ func test_bold_scoring() -> void:
 	for i in 10:  # 1s in sight
 		ms.tick(0.1)
 	ms.set_in_sight(hider, false)
-	var raw: float = ms.players[hider]["score"]
+	var raw: float = ms.score_of(hider)
 	# 2s * 1/s survival + 1s * 3/s bold = 5
 	check(absf(raw - 5.0) < 0.11, "1s spotted of 2s = 5 points (got %.2f)" % raw)
+
+
+func test_score_breakdown() -> void:
+	print("score breakdown:")
+	# 1 seeker, 2 hiders: spot one hider for 1s, eliminate the other, then let
+	# the timer expire so the surviving hider also collects the survive bonus.
+	var ms := _make(3, 1, {"seek_time": 10.0})
+	ms.start()
+	_tick_until(ms, MatchState.Phase.SEEK)
+	var seeker: int = ms.seekers()[0]
+	var survivor: int = ms.hiders()[0]
+	var victim: int = ms.hiders()[1]
+	ms.set_in_sight(survivor, true)
+	for i in 10:  # 1s in sight
+		ms.tick(0.1)
+	ms.set_in_sight(survivor, false)
+	ms.consume_shot(seeker)
+	ms.report_hit(seeker, victim)
+	check(_tick_until(ms, MatchState.Phase.RESULTS), "round times out into RESULTS")
+	check(ms.winner == MatchState.Team.HIDERS, "one hider survived: hiders win")
+	for row: Dictionary in ms.scores_snapshot():
+		var component_sum: int = row["survival"] + row["bold"] + row["kill_points"] + row["bonus"]
+		check(absi(component_sum - row["score"]) <= 1,
+				"%s breakdown sums to total (%d ~ %d)" % [row["name"], component_sum, row["score"]])
+		if row["id"] == seeker:
+			check(row["kills"] == 1 and row["kill_points"] == 100,
+					"seeker breakdown shows 1 find worth 100")
+			check(row["bonus"] == 0, "no sweep bonus when a hider survives")
+		elif row["id"] == survivor:
+			check(row["bold"] == 3, "survivor earned 1s of bold points (got %d)" % row["bold"])
+			check(row["survival"] == 10, "survivor earned 10s of survival (got %d)" % row["survival"])
+			check(row["bonus"] == 75, "survivor got the survive bonus")
+		elif row["id"] == victim:
+			check(row["bonus"] == 0 and not row["alive"], "found hider gets no bonus")
 
 
 func test_disconnect_wins() -> void:
@@ -284,10 +319,25 @@ func test_hud_passes_mouse_through() -> void:
 	check(hud._brush_ring.visible, "paint mode shows the brush ring")
 	check(hud._ring_pos == Vector2(120, 80) and is_equal_approx(hud._ring_px, 14.0),
 			"brush ring tracks cursor position and projected radius")
-	hud.show_results([], 0, 1)
+	var rows := [
+		{"id": 1, "name": "Hider", "role": MatchStateScript.Role.HIDER, "score": 88,
+			"survival": 10, "bold": 3, "kills": 0, "kill_points": 0, "bonus": 75, "alive": true},
+		{"id": 2, "name": "Seeker", "role": MatchStateScript.Role.SEEKER, "score": 100,
+			"survival": 0, "bold": 0, "kills": 1, "kill_points": 100, "bonus": 0, "alive": true},
+	]
+	hud.show_results(rows, MatchStateScript.Team.HIDERS, 1)
+	check(hud._score_breakdown(rows[0]) == "survival +10   bold +3   survived +75",
+			"hider results row explains its score")
+	check(hud._score_breakdown(rows[1]) == "found 1  +100",
+			"seeker results row explains its score")
 	bad.clear()
 	_collect_stop_controls(hud, bad)
 	check(bad.is_empty(), "results overlay ignores mouse too (offenders: %s)" % [bad])
+	# Scores arrive before the RESULTS phase broadcast; the overlay must survive it.
+	hud.on_phase(MatchStateScript.Phase.RESULTS, 3.0, MatchStateScript.Role.HIDER, {})
+	check(hud._results.visible, "RESULTS phase change keeps the scoreboard visible")
+	hud.on_phase(MatchStateScript.Phase.PAINT, 5.0, MatchStateScript.Role.HIDER, {})
+	check(not hud._results.visible, "next round's PAINT phase clears the scoreboard")
 	hud.free()
 
 

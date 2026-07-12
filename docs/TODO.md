@@ -1,8 +1,18 @@
 # Paint-n-Seek — Feature Backlog
 
 This backlog turns the July 12, 2026 playtest notes into concrete feature
-requests. It is planning documentation only; none of these items are
-implemented yet.
+requests. It is planning documentation; items are unimplemented unless marked
+**SHIPPED**.
+
+**Shipped so far (2026-07-12):**
+
+- `SETTINGS-01` slice: hiding time, seeking time, and ammo per hider are
+  host-editable in the lobby (`scripts/lobby.gd` `_add_setting_spin`).
+- `SCORE-01` slice: results show a per-player breakdown (survival, bold,
+  finds, bonus) instead of one opaque number; `MatchState` now tracks the
+  components and derives the total from them.
+- Fix found along the way: the RESULTS scoreboard was being hidden by the
+  phase broadcast that follows the score broadcast (`hud.gd` `on_phase`).
 
 ## Effort and grouping at a glance
 
@@ -43,13 +53,12 @@ These are good candidates when a small, independent improvement is wanted:
    at representative Retina and Windows resolutions.
 4. Preserve surviving hiders' final ragdoll poses when the seek timer expires —
    the smallest independently useful slice of `REVEAL-01`.
-5. Expose hiding time and seeking time in the existing lobby settings — the
-   smallest useful slice of `SETTINGS-01` because both values already exist in
-   the central configuration.
-6. Expose fixed ammo or the existing ammo-per-hider value — another contained
-   `SETTINGS-01` slice.
-7. Extend `SCORE-01` to display the scoring breakdown — the underlying survival
-   and visible-time calculation is already present.
+5. **SHIPPED** — hiding time and seeking time are exposed in the lobby
+   settings (`SETTINGS-01` slice).
+6. **SHIPPED** — ammo per hider is exposed in the lobby settings; a separate
+   fixed-ammo mode remains future `SETTINGS-01` work.
+7. **SHIPPED** — results display the `SCORE-01` scoring breakdown (survival,
+   bold, finds, end bonus).
 8. Prototype a uniformly enlarged copy of one map for `AVATAR-01` — this may
    deliver the smaller-character feel without changing player physics.
 

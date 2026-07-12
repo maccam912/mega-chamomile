@@ -244,7 +244,10 @@ func set_ragdoll(active: bool) -> void:
 func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void:
 	_time_left = duration
 	_counting = true
-	_results.visible = false
+	# The server broadcasts the RESULTS scores before the phase change, so the
+	# already-visible scoreboard must survive this call.
+	if phase != MatchState.Phase.RESULTS:
+		_results.visible = false
 	match phase:
 		MatchState.Phase.PAINT:
 			_phase_label.text = "PAINT PHASE — blend in"
@@ -368,6 +371,11 @@ func show_results(scores: Array, winner: int, my_id: int) -> void:
 		l.text = "%-18s %-7s %5d%s%s" % [row["name"], role_txt, row["score"], state, me]
 		l.add_theme_font_size_override("font_size", 20)
 		box.add_child(l)
+		var detail := Label.new()
+		detail.text = "        " + _score_breakdown(row)
+		detail.add_theme_font_size_override("font_size", 13)
+		detail.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+		box.add_child(detail)
 
 	var back := Label.new()
 	back.text = "back to lobby shortly..."
@@ -377,3 +385,18 @@ func show_results(scores: Array, winner: int, my_id: int) -> void:
 	box.add_child(back)
 
 	_pass_mouse_through(_results)
+
+
+## One line per player explaining where the total came from.
+func _score_breakdown(row: Dictionary) -> String:
+	var parts: Array[String] = []
+	if row["role"] == MatchState.Role.SEEKER:
+		parts.append("found %d  +%d" % [row["kills"], row["kill_points"]])
+		if row["bonus"] > 0:
+			parts.append("sweep bonus +%d" % row["bonus"])
+	else:
+		parts.append("survival +%d" % row["survival"])
+		parts.append("bold +%d" % row["bold"])
+		if row["bonus"] > 0:
+			parts.append("survived +%d" % row["bonus"])
+	return "   ".join(parts)

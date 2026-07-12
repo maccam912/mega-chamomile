@@ -28,7 +28,9 @@ var cfg := {
 var phase: int = Phase.LOBBY
 var time_left := 0.0
 var winner: int = Team.NOBODY
-## id -> {name, role, alive, score, in_sight, cooldown, ammo}
+## id -> {name, role, alive, survival, bold, kills, bonus, in_sight, cooldown, ammo}
+## A player's total score is derived from the components (see score_of), so the
+## results breakdown can never disagree with the total.
 var players := {}
 
 
@@ -43,7 +45,10 @@ func add_player(id: int, pname: String) -> void:
 		"name": pname,
 		"role": Role.NONE,
 		"alive": true,
-		"score": 0.0,
+		"survival": 0.0,  # points from time alive during SEEK
+		"bold": 0.0,      # extra points from time in a seeker's sight
+		"kills": 0,       # hiders found (seekers only)
+		"bonus": 0.0,     # end-of-round survive/sweep bonus
 		"in_sight": false,
 		"cooldown": 0.0,
 		"ammo": 0,
@@ -93,9 +98,9 @@ func tick(delta: float) -> void:
 			var p: Dictionary = players[id]
 			p["cooldown"] = maxf(0.0, p["cooldown"] - delta)
 			if p["role"] == Role.HIDER and p["alive"]:
-				p["score"] += cfg["survival_pps"] * delta
+				p["survival"] += cfg["survival_pps"] * delta
 				if p["in_sight"]:
-					p["score"] += cfg["bold_pps"] * delta
+					p["bold"] += cfg["bold_pps"] * delta
 	time_left -= delta
 	if time_left <= 0.0:
 		_advance()
@@ -126,7 +131,7 @@ func report_hit(shooter_id: int, victim_id: int) -> bool:
 		return false
 	victim["alive"] = false
 	victim["in_sight"] = false
-	shooter["score"] += cfg["kill_points"]
+	shooter["kills"] += 1
 	player_eliminated.emit(victim_id, shooter_id)
 	_check_team_collapse()
 	return true
@@ -165,7 +170,15 @@ func ammo_of(id: int) -> int:
 	return players[id]["ammo"] if players.has(id) else 0
 
 
-## Sorted scoreboard rows for broadcast/display.
+## Total score derived from the per-component tallies.
+func score_of(id: int) -> float:
+	if not players.has(id):
+		return 0.0
+	var p: Dictionary = players[id]
+	return p["survival"] + p["bold"] + p["kills"] * cfg["kill_points"] + p["bonus"]
+
+
+## Sorted scoreboard rows for broadcast/display, with the score breakdown.
 func scores_snapshot() -> Array:
 	var rows := []
 	for id: int in players:
@@ -174,7 +187,12 @@ func scores_snapshot() -> Array:
 			"id": id,
 			"name": p["name"],
 			"role": p["role"],
-			"score": int(roundf(p["score"])),
+			"score": int(roundf(score_of(id))),
+			"survival": int(roundf(p["survival"])),
+			"bold": int(roundf(p["bold"])),
+			"kills": int(p["kills"]),
+			"kill_points": int(p["kills"] * cfg["kill_points"]),
+			"bonus": int(roundf(p["bonus"])),
 			"alive": p["alive"],
 		})
 	rows.sort_custom(func(a, b) -> bool: return a["score"] > b["score"])
@@ -215,10 +233,10 @@ func _finish(winning_team: int) -> void:
 	winner = winning_team
 	if winning_team == Team.HIDERS:
 		for id: int in alive_hiders():
-			players[id]["score"] += cfg["survive_bonus"]
+			players[id]["bonus"] += cfg["survive_bonus"]
 	elif winning_team == Team.SEEKERS:
 		for id: int in seekers():
-			players[id]["score"] += cfg["sweep_bonus"]
+			players[id]["bonus"] += cfg["sweep_bonus"]
 	_enter_phase(Phase.RESULTS)
 
 
