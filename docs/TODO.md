@@ -17,6 +17,8 @@ requests. It is planning documentation; items are unimplemented unless marked
   character model now faces its travel direction instead of walking backward.
 - `MOVE-01` **SHIPPED**: holding Space climbs continuously while airborne and
   touching a wall; holding U returns an active player to their assigned spawn.
+- `PAINT-01` **SHIPPED**: strokes carry the camera-ray axis and paint every
+  vertex inside that through-body footprint, including hidden back surfaces.
 
 ## Effort and grouping at a glance
 
@@ -34,7 +36,7 @@ after investigation, especially for bugs.
 | `REVEAL-01` | S pose preservation / M full reveal | Medium | `ROUND-01`, results presentation | Keeping ragdoll state should be small; synchronized highlights and seeker-only results movement cross gameplay and rendering systems. |
 | `SCORE-01` | S–M | High | `SCORE-02`, `SETTINGS-01` | The core survival and line-of-sight scoring already exists; breakdowns and configuration are the new work. |
 | `HIDE-01` | M | High | `ROUND-01`, `CAMERA-01` | A contained ready-state and phase-transition feature. |
-| `PAINT-01` | S–M | Medium | `AVATAR-01`, `AVATAR-02` | Painting must use a through-body brush volume instead of limiting strokes to camera-visible surfaces. |
+| `PAINT-01` | **SHIPPED** | High | Paint regression tests | Camera-ray-aligned cylindrical strokes paint front and hidden back surfaces while retaining the brush footprint. |
 | `NET-01` | M | High | Lobby and main-menu UI | LAN discovery can advertise existing ENet hosts and present them in a join list while retaining manual IP as a fallback. |
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
 | `UI-02` | M | High | `UI-01`, `BRAND-01` | A focused main-menu layout, styling, motion, and audio pass without changing game rules. |
@@ -216,16 +218,17 @@ skip the remaining countdown and begin seeking.
 
 ## P1 — Paint through the complete character
 
-### PAINT-01: Paint front and back vertices in one stroke
+### PAINT-01: Paint front and back vertices in one stroke — **SHIPPED**
 
 **Problem:** Painting currently affects only the visible face of the character,
 leaving vertices on the back side unchanged unless the player rotates to expose
 them.
 
-**Requested behavior:** Treat the brush footprint as passing all the way through
-the character. A stroke should paint every paintable vertex within that
-through-body volume, including occluded and back-facing vertices, rather than
-stopping at the first visible surface.
+**Resolution:** Each replicated stroke now includes its camera-ray axis in
+body-local space. Every articulated body part transforms that axis into its own
+local space and colors vertices by perpendicular distance to it, producing a
+cylindrical brush volume through the complete character. This preserves the
+existing radius and falloff while reaching occluded and back-facing vertices.
 
 **Acceptance criteria:**
 

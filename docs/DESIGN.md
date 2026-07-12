@@ -34,9 +34,13 @@ camouflage by painting your own body with colors sampled from the world.
   **vertex-color painting**:
   - Materials use `vertex_color_use_as_albedo = true` (works in Compatibility).
   - Painting = raycast from the third-person camera crosshair onto your own
-    body part, then color every vertex within brush radius of the hit point
-    *in that part's local space*. No UV math, no texture readback.
-  - Strokes replicate as tiny RPCs: `(part_index, local_pos, color, radius)`.
+    body part, then pass a cylindrical brush volume along the camera ray through
+    the complete character. Every vertex within the projected brush radius is
+    colored, including occluded and back-facing surfaces. No UV math or texture
+    readback is needed.
+  - Strokes replicate as compact RPCs containing body-local endpoints, color,
+    radius, and the through-body ray axis. Each peer transforms the axis into
+    every articulated part's local space, including rotated ragdoll pieces.
     Late joiners are out of scope for MVP (lobby locks at match start).
 - **Eyedropper**: read the rendered frame's center pixel
   (`viewport.get_texture().get_image().get_pixel(...)`) — samples anything on

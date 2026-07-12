@@ -236,37 +236,56 @@ func interpolate_remote_pose(delta: float) -> void:
 				_remote_targets[i], weight)
 
 
-func splat_at(local_pos: Vector3, color: Color, radius: float) -> void:
-	stroke(local_pos, local_pos, color, radius)
+func splat_at(local_pos: Vector3, color: Color, radius: float,
+		through_axis: Vector3) -> void:
+	stroke(local_pos, local_pos, color, radius, through_axis)
 
 
-func stroke(from_pos: Vector3, to_pos: Vector3, color: Color, radius: float) -> void:
+## Paint uses a cylinder centered on each visible-surface stamp and extending
+## through the complete avatar along the camera ray. Callers must provide that
+## ray in body-local space so the same footprint can be reconstructed by every
+## peer and transformed correctly for independently rotated ragdoll parts.
+func stroke(from_pos: Vector3, to_pos: Vector3, color: Color, radius: float,
+		through_axis: Vector3) -> void:
+	var axis := through_axis.normalized()
+	if axis.is_zero_approx() or radius <= 0.0:
+		return
 	var spacing := maxf(radius * STAMP_SPACING, 0.01)
 	var steps := mini(int(ceilf(from_pos.distance_to(to_pos) / spacing)), MAX_STAMPS)
 	var dirty := {}
-	_stamp(from_pos, color, radius, dirty)
+	_stamp(from_pos, color, radius, axis, dirty)
 	for s in range(1, steps + 1):
-		_stamp(from_pos.lerp(to_pos, float(s) / steps), color, radius, dirty)
+		_stamp(from_pos.lerp(to_pos, float(s) / steps), color, radius, axis, dirty)
 	for part_idx: int in dirty:
 		_rebuild(part_idx)
 
 
-func _stamp(local_pos: Vector3, color: Color, radius: float, dirty: Dictionary) -> void:
+func _stamp(local_pos: Vector3, color: Color, radius: float,
+		through_axis: Vector3, dirty: Dictionary) -> void:
 	var world_point := global_transform * local_pos if is_inside_tree() else Vector3.ZERO
+	var world_axis := (
+			(global_transform.basis * through_axis).normalized()
+			if is_inside_tree() else Vector3.ZERO)
 	for part_idx in part_meshes.size():
 		var p: Vector3
+		var axis: Vector3
 		if is_inside_tree():
 			p = part_bodies[part_idx].global_transform.affine_inverse() * world_point
+			axis = (part_bodies[part_idx].global_transform.basis.inverse() * world_axis).normalized()
 		else:
 			p = part_bodies[part_idx].transform.affine_inverse() * local_pos
-		var reach: Vector3 = PARTS[part_idx]["size"] * 0.5 + Vector3.ONE * radius
-		if absf(p.x) > reach.x or absf(p.y) > reach.y or absf(p.z) > reach.z:
+			axis = (part_bodies[part_idx].transform.basis.inverse() * through_axis).normalized()
+		# Cheap conservative rejection: if the paint axis misses a sphere around
+		# the entire part, it cannot touch any of that part's vertices.
+		var center_distance := _distance_to_axis(Vector3.ZERO, p, axis)
+		var part_radius: float = (PARTS[part_idx]["size"] as Vector3).length() * 0.5
+		if center_distance > part_radius + radius:
 			continue
 		var verts: PackedVector3Array = _part_positions[part_idx]
 		var colors: PackedColorArray = _part_colors[part_idx]
 		var changed := false
 		for i in verts.size():
-			var d := verts[i].distance_to(p)
+			var d := _distance_to_axis(verts[i], p, axis)
 			if d <= radius:
 				var t: float = clampf((1.0 - d / radius) * 2.0, 0.0, 1.0)
 				colors[i] = colors[i].lerp(color, t)
@@ -274,6 +293,12 @@ func _stamp(local_pos: Vector3, color: Color, radius: float, dirty: Dictionary) 
 		if changed:
 			_part_colors[part_idx] = colors
 			dirty[part_idx] = true
+
+
+static func _distance_to_axis(point: Vector3, axis_origin: Vector3,
+		axis_direction: Vector3) -> float:
+	var offset := point - axis_origin
+	return (offset - axis_direction * offset.dot(axis_direction)).length()
 
 
 func fill_all(color: Color) -> void:

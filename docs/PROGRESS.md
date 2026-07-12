@@ -14,6 +14,10 @@ build is so a fresh session can pick up instantly.
   airborne and touching a wall climbs continuously at 2.5 m/s, with no duration
   limit. Holding U for 1.25 seconds returns an active player to their assigned
   spawn; the action has a 10-second cooldown and is disabled while frozen.
+- **Paint now passes through the complete character** (`PAINT-01`): strokes
+  replicate their camera-ray axis and use a cylindrical vertex-distance test,
+  painting matching front, occluded, and back surfaces with the same footprint
+  and falloff. The ray is transformed per articulated ragdoll part.
 - **Lobby settings** (`SETTINGS-01` slices): host can now set hiding time
   (15–300s), seeking time (30–600s), and ammo per hider (1–10) next to the
   existing seeker count and map pickers. One `_add_setting_spin()` helper in
@@ -29,7 +33,8 @@ build is so a fresh session can pick up instantly.
   the server broadcasts scores *then* the phase change, and `hud.on_phase()`
   unconditionally hid `_results`. Now it only hides it for non-RESULTS phases;
   regression-tested.
-- Verified: 108 headless checks pass (new: cardinal travel headings, wall-contact
+- Verified: 110 headless checks pass (new: through-body back-face painting and
+  footprint containment, cardinal travel headings, wall-contact
   climbing, open-air rejection, ordinary jump preservation, unstuck hold and
   cooldown, score breakdowns, results-overlay survival); 2-instance ENet E2E
   clean with breakdown fields replicated; windowed screenshots confirm the new

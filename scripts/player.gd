@@ -523,10 +523,12 @@ func _paint_sample(screen_point: Vector2) -> void:
 		_stroke_active = false
 		return  # you can only paint yourself
 	var local_pos: Vector3 = body.global_transform.affine_inverse() * Vector3(hit["position"])
+	var world_axis := _camera.project_ray_normal(screen_point)
+	var local_axis := (body.global_transform.basis.inverse() * world_axis).normalized()
 	if not _stroke_active:
 		_stroke_active = true
 		_stroke_last = local_pos
-		rpc(&"apply_stroke", local_pos, local_pos, current_color, brush_radius)
+		rpc(&"apply_stroke", local_pos, local_pos, current_color, brush_radius, local_axis)
 		return
 	var gap := _stroke_last.distance_to(local_pos)
 	if gap < brush_radius * PAINT_MIN_STEP:
@@ -534,7 +536,7 @@ func _paint_sample(screen_point: Vector2) -> void:
 	# Big jumps (cursor flicked across the body, or skimmed off an edge and
 	# back on) get a fresh stamp, not a line drawn through the torso.
 	var from := _stroke_last if gap <= PAINT_MAX_GAP else local_pos
-	rpc(&"apply_stroke", from, local_pos, current_color, brush_radius)
+	rpc(&"apply_stroke", from, local_pos, current_color, brush_radius, local_axis)
 	_stroke_last = local_pos
 
 
@@ -566,8 +568,9 @@ func sync_state(pos: Vector3, yaw: float, look: Vector3, crouching: bool,
 
 
 @rpc("authority", "call_local", "reliable")
-func apply_stroke(from_pos: Vector3, to_pos: Vector3, color: Color, radius: float) -> void:
-	body.stroke(from_pos, to_pos, color, radius)
+func apply_stroke(from_pos: Vector3, to_pos: Vector3, color: Color, radius: float,
+		through_axis: Vector3) -> void:
+	body.stroke(from_pos, to_pos, color, radius, through_axis)
 	if _paint_sound_timer <= 0.0:
 		_paint_sound_timer = 0.15
 		_snd_paint.pitch_scale = randf_range(0.9, 1.15)

@@ -225,20 +225,29 @@ func test_paint_splat() -> void:
 		total += body._part_positions[i].size()
 	check(total > 1000, "subdivided body has real vertex density (%d verts)" % total)
 
-	# Splat red on the front of the head (body-space point).
+	# Splat red on the front of the head along the camera ray. The cylindrical
+	# footprint must reach matching vertices on the hidden back face.
 	var head_idx := body.part_index("Head")
 	var head_center: Vector3 = PaintableBodyScript.PARTS[head_idx]["pos"]
 	var front := head_center + Vector3(0, 0, -0.18)
-	body.splat_at(front, Color.RED, 0.1)
+	body.splat_at(front, Color.RED, 0.1, Vector3.BACK)
 	var painted := _count_painted(body, head_idx, Color.RED)
 	var back_painted := 0
+	var back_outside_footprint := 0
 	var colors: PackedColorArray = body._part_colors[head_idx]
 	var verts: PackedVector3Array = body._part_positions[head_idx]
 	for i in verts.size():
 		if colors[i].r > 0.9 and colors[i].g < 0.5 and verts[i].z > 0.1:
 			back_painted += 1  # back of the head, part-local space
+		elif colors[i].is_equal_approx(Color.WHITE) and verts[i].z > 0.1 \
+				and Vector2(verts[i].x, verts[i].y).length() > 0.12:
+			back_outside_footprint += 1
 	check(painted > 0, "splat painted vertices near the hit (%d)" % painted)
-	check(back_painted == 0, "back of the head stayed white")
+	check(back_painted > 0, "through-body splat painted the hidden back face")
+	check(back_outside_footprint > 0,
+			"back-face vertices outside the brush footprint stayed white")
+	check(_count_painted(body, body.part_index("LowerLegL"), Color.RED) == 0,
+			"through-body splat did not spill onto an unrelated part")
 
 	body.fill_all(Color.BLUE)
 	check(body._part_colors[0][0].is_equal_approx(Color.BLUE), "fill_all recolors everything")
@@ -269,7 +278,7 @@ func test_paint_stroke() -> void:
 	var arm_idx := body.part_index("UpperArmR")
 	var torso: Vector3 = PaintableBodyScript.PARTS[torso_idx]["pos"]
 	body.stroke(torso + Vector3(-0.2, 0.1, -0.14), torso + Vector3(0.2, 0.1, -0.14),
-			Color.RED, 0.06)
+			Color.RED, 0.06, Vector3.BACK)
 	var colors: PackedColorArray = body._part_colors[torso_idx]
 	var verts: PackedVector3Array = body._part_positions[torso_idx]
 	var mid_painted := 0
@@ -280,7 +289,7 @@ func test_paint_stroke() -> void:
 	check(mid_painted > 0, "stroke filled in between the endpoints (%d mid verts)" % mid_painted)
 
 	# A stamp at the torso/arm boundary paints both parts — no seams.
-	body.splat_at(Vector3(0.26, 1.15, -0.11), Color.GREEN, 0.08)
+	body.splat_at(Vector3(0.26, 1.15, -0.11), Color.GREEN, 0.08, Vector3.BACK)
 	check(_count_painted(body, torso_idx, Color.GREEN) > 0, "boundary stamp reached the torso")
 	check(_count_painted(body, arm_idx, Color.GREEN) > 0, "boundary stamp reached the right arm")
 	body.free()
