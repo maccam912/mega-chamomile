@@ -8,6 +8,7 @@ const SessionStateScript := preload("res://scripts/session_state.gd")
 const PaintableBodyScript := preload("res://scripts/paintable_body.gd")
 const AvatarCatalogScript := preload("res://scripts/avatar_catalog.gd")
 const AppScript := preload("res://autoload/app.gd")
+const LANAddressScript := preload("res://scripts/lan_address.gd")
 
 var _failures := 0
 var _checks := 0
@@ -35,6 +36,7 @@ func _initialize() -> void:
 	test_unstuck_action()
 	test_fall_recovery()
 	test_map_selection()
+	test_lan_ip_selection()
 
 	print("")
 	if _failures == 0:
@@ -624,3 +626,16 @@ func test_map_selection() -> void:
 	app.select_map("not-a-map")
 	check(app.settings["map_id"] == app.DEFAULT_MAP_ID, "unknown map falls back safely")
 	app.free()
+
+
+func test_lan_ip_selection() -> void:
+	print("LAN IP selection:")
+	check(LANAddressScript.preferred(PackedStringArray([
+			"127.0.0.1", "10.0.0.8", "192.168.1.42", "fe80::1"
+	])) == "192.168.1.42", "192.168 address is preferred for hosting")
+	check(LANAddressScript.preferred(PackedStringArray([
+			"127.0.0.1", "169.254.1.2", "10.20.30.40"
+	])) == "10.20.30.40", "other private LAN ranges are supported")
+	check(LANAddressScript.preferred(PackedStringArray([
+			"127.0.0.1", "169.254.1.2", "fe80::1"
+	])).is_empty(), "loopback, link-local, and IPv6 addresses are not advertised")

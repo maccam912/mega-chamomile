@@ -1,6 +1,8 @@
 extends Control
 ## Lobby: shows connected players; the host picks seeker count and starts.
 
+const LANAddress := preload("res://scripts/lan_address.gd")
+
 var _player_list: VBoxContainer
 var _start_btn: Button
 var _seeker_spin: SpinBox
@@ -41,7 +43,14 @@ func _build_ui() -> void:
 	box.add_child(title)
 
 	var ip_hint := Label.new()
-	ip_hint.text = "friends join with your LAN IP, port %d" % App.PORT
+	if Net.is_server():
+		var lan_ip := LANAddress.preferred(IP.get_local_addresses())
+		ip_hint.text = (
+				"Friends can join at %s:%d" % [lan_ip, App.PORT]
+				if not lan_ip.is_empty()
+				else "Could not find a LAN IP (port %d)" % App.PORT)
+	else:
+		ip_hint.text = "Connected to host"
 	ip_hint.add_theme_font_size_override("font_size", 13)
 	ip_hint.add_theme_color_override("font_color", Color("8a92a6"))
 	ip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -113,8 +122,6 @@ func _build_ui() -> void:
 		last.add_theme_color_override("font_color", Color("8a92a6"))
 		last.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		box.add_child(last)
-
-
 func _build_avatar_picker(box: VBoxContainer) -> void:
 	var row := HBoxContainer.new()
 	row.custom_minimum_size = Vector2(0, 180)
