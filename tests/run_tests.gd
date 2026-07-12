@@ -5,6 +5,7 @@ extends SceneTree
 
 const MatchStateScript := preload("res://scripts/match_state.gd")
 const PaintableBodyScript := preload("res://scripts/paintable_body.gd")
+const AppScript := preload("res://autoload/app.gd")
 
 var _failures := 0
 var _checks := 0
@@ -20,8 +21,10 @@ func _initialize() -> void:
 	test_solo_mode()
 	test_paint_splat()
 	test_paint_stroke()
+	test_articulated_ragdoll()
 	test_hud_passes_mouse_through()
 	test_fall_recovery()
+	test_map_selection()
 
 	print("")
 	if _failures == 0:
@@ -175,20 +178,21 @@ func test_paint_splat() -> void:
 	print("paintable body splats:")
 	var body: PaintableBody = PaintableBodyScript.new()
 	body.build(1, Color.WHITE)
-	check(body.part_meshes.size() == 6, "humanoid has 6 paintable parts")
+	check(body.part_meshes.size() == 11, "humanoid has 11 articulated paintable parts")
 	var total := 0
-	for i in 6:
+	for i in body.part_meshes.size():
 		total += body._part_positions[i].size()
 	check(total > 1000, "subdivided body has real vertex density (%d verts)" % total)
 
 	# Splat red on the front of the head (body-space point).
-	var head_center: Vector3 = PaintableBodyScript.PARTS[5]["pos"]
+	var head_idx := body.part_index("Head")
+	var head_center: Vector3 = PaintableBodyScript.PARTS[head_idx]["pos"]
 	var front := head_center + Vector3(0, 0, -0.18)
 	body.splat_at(front, Color.RED, 0.1)
-	var painted := _count_painted(body, 5, Color.RED)
+	var painted := _count_painted(body, head_idx, Color.RED)
 	var back_painted := 0
-	var colors: PackedColorArray = body._part_colors[5]
-	var verts: PackedVector3Array = body._part_positions[5]
+	var colors: PackedColorArray = body._part_colors[head_idx]
+	var verts: PackedVector3Array = body._part_positions[head_idx]
 	for i in verts.size():
 		if colors[i].r > 0.9 and colors[i].g < 0.5 and verts[i].z > 0.1:
 			back_painted += 1  # back of the head, part-local space
@@ -220,11 +224,13 @@ func test_paint_stroke() -> void:
 
 	# Drag across the torso front: endpoints 0.4m apart with a 0.06 brush.
 	# Only stroke interpolation can reach the midpoint.
-	var torso: Vector3 = PaintableBodyScript.PARTS[2]["pos"]
+	var torso_idx := body.part_index("Torso")
+	var arm_idx := body.part_index("UpperArmR")
+	var torso: Vector3 = PaintableBodyScript.PARTS[torso_idx]["pos"]
 	body.stroke(torso + Vector3(-0.2, 0.1, -0.14), torso + Vector3(0.2, 0.1, -0.14),
 			Color.RED, 0.06)
-	var colors: PackedColorArray = body._part_colors[2]
-	var verts: PackedVector3Array = body._part_positions[2]
+	var colors: PackedColorArray = body._part_colors[torso_idx]
+	var verts: PackedVector3Array = body._part_positions[torso_idx]
 	var mid_painted := 0
 	for i in verts.size():
 		if _colors_close(colors[i], Color.RED) and absf(verts[i].x) < 0.05 \
@@ -234,8 +240,26 @@ func test_paint_stroke() -> void:
 
 	# A stamp at the torso/arm boundary paints both parts — no seams.
 	body.splat_at(Vector3(0.26, 1.15, -0.11), Color.GREEN, 0.08)
-	check(_count_painted(body, 2, Color.GREEN) > 0, "boundary stamp reached the torso")
-	check(_count_painted(body, 4, Color.GREEN) > 0, "boundary stamp reached the right arm")
+	check(_count_painted(body, torso_idx, Color.GREEN) > 0, "boundary stamp reached the torso")
+	check(_count_painted(body, arm_idx, Color.GREEN) > 0, "boundary stamp reached the right arm")
+	body.free()
+
+
+func test_articulated_ragdoll() -> void:
+	print("articulated ragdoll:")
+	var body: PaintableBody = PaintableBodyScript.new()
+	body.build(7, Color.WHITE)
+	check(body.joints.size() == 10, "rig connects 11 pieces with 10 joints")
+	for joint_name in ["ElbowL", "ElbowR", "KneeL", "KneeR", "Waist"]:
+		check(body.get_node_or_null(joint_name) != null, "%s joint exists" % joint_name)
+	body.set_ragdoll(true, false)
+	check(body.ragdolled, "ragdoll mode activates")
+	check(body.part_bodies[0].top_level, "ragdoll pieces use world-space poses")
+	var pose := body.capture_pose()
+	check(pose.size() == body.part_bodies.size(), "network pose contains every body piece")
+	body.set_ragdoll(false, false)
+	check(not body.ragdolled and not body.part_bodies[0].top_level,
+			"standing up restores the authored hierarchy")
 	body.free()
 
 
@@ -249,7 +273,9 @@ func test_hud_passes_mouse_through() -> void:
 	hud._ready()
 	var bad: Array = []
 	_collect_stop_controls(hud, bad)
-	check(bad.is_empty(), "every HUD control ignores mouse (offenders: %s)" % [bad])
+	check(bad.is_empty(), "non-interactive HUD controls ignore mouse (offenders: %s)" % [bad])
+	check(hud._ragdoll_button.mouse_filter == Control.MOUSE_FILTER_STOP,
+			"ragdoll HUD button remains clickable")
 	hud.set_paint_mode(true)
 	hud.set_brush_cursor(Vector2(120, 80), 14.0, Color.CORAL)
 	check(hud._brush_ring.visible, "paint mode shows the brush ring")
@@ -263,7 +289,8 @@ func test_hud_passes_mouse_through() -> void:
 
 
 func _collect_stop_controls(node: Node, bad: Array) -> void:
-	if node is Control and node.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+	if node is Control and node.mouse_filter != Control.MOUSE_FILTER_IGNORE \
+			and not node.has_meta("interactive_hud"):
 		bad.append(node.name)
 	for child in node.get_children():
 		_collect_stop_controls(child, bad)
@@ -281,3 +308,26 @@ func test_fall_recovery() -> void:
 	check(player.velocity == Vector3.ZERO, "fall recovery clears momentum")
 	check(player._target_pos == player.respawn_position, "network interpolation target also resets")
 	player.free()
+
+
+func test_map_selection() -> void:
+	print("map selection:")
+	var app := AppScript.new()
+	for map_id: String in app.MAPS:
+		app.select_map(map_id)
+		var scene := load(app.selected_map_scene()) as PackedScene
+		check(scene != null, "%s map scene loads" % map_id)
+		if scene == null:
+			continue
+		var instance := scene.instantiate()
+		check(instance.has_method("hider_spawns"), "%s provides hider spawns" % map_id)
+		check(instance.has_method("seeker_spawns"), "%s provides seeker spawns" % map_id)
+		check(instance.has_method("set_seek_open"), "%s provides seek release hook" % map_id)
+		check(not instance.hider_spawns().is_empty(), "%s has usable hider spawns" % map_id)
+		check(not instance.seeker_spawns().is_empty(), "%s has usable seeker spawns" % map_id)
+		if map_id == "empty":
+			check(instance.get_node_or_null("Floor") != null, "empty map floor is authored in the scene")
+		instance.free()
+	app.select_map("not-a-map")
+	check(app.settings["map_id"] == app.DEFAULT_MAP_ID, "unknown map falls back safely")
+	app.free()

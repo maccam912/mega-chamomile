@@ -124,11 +124,12 @@ func _sync_players(new_players: Dictionary) -> void:
 ## Host calls this from the lobby to move everyone into the game scene.
 func request_start() -> void:
 	if is_server():
-		rpc(&"_load_game")
+		rpc(&"_load_game", str(App.settings["map_id"]))
 
 
 @rpc("authority", "call_local", "reliable")
-func _load_game() -> void:
+func _load_game(map_id: String) -> void:
+	App.select_map(map_id)
 	App.in_match = true
 	App.status_message = ""
 	App.goto_scene(App.GAME_SCENE)

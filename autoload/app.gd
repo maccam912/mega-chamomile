@@ -5,10 +5,22 @@ const PORT := 24565
 const GAME_SCENE := "res://scenes/game.tscn"
 const LOBBY_SCENE := "res://scenes/lobby.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
+const DEFAULT_MAP_ID := "basic"
+const MAPS := {
+	"basic": {
+		"label": "Basic Arena",
+		"scene": "res://maps/map_basic.tscn",
+	},
+	"empty": {
+		"label": "Empty Map",
+		"scene": "res://maps/map_empty.tscn",
+	},
+}
 
 ## Host-configured match settings. The host's copy is authoritative; relevant
 ## values reach clients inside match/phase broadcasts.
 var settings := {
+	"map_id": DEFAULT_MAP_ID,
 	"seeker_count": 1,
 	"paint_time": 90.0,
 	"seek_time": 180.0,
@@ -73,6 +85,17 @@ func play_ui_click() -> void:
 	_ui_player.play()
 
 
+func select_map(map_id: String) -> void:
+	settings["map_id"] = map_id if MAPS.has(map_id) else DEFAULT_MAP_ID
+
+
+func selected_map_scene() -> String:
+	var map_id := str(settings.get("map_id", DEFAULT_MAP_ID))
+	if not MAPS.has(map_id):
+		map_id = DEFAULT_MAP_ID
+	return str(MAPS[map_id]["scene"])
+
+
 func _parse_cli() -> void:
 	var args := OS.get_cmdline_user_args()
 	var i := 0
@@ -97,6 +120,7 @@ func _setup_input_map() -> void:
 	_add_key("crouch", KEY_C)
 	_add_key("pause", KEY_ESCAPE)
 	_add_key("toggle_paint_mode", KEY_F)
+	_add_key("toggle_ragdoll", KEY_R)
 	_add_mouse("primary_action", MOUSE_BUTTON_LEFT)   # paint (hider) / shoot (seeker)
 	_add_mouse("eyedrop", MOUSE_BUTTON_RIGHT)
 	_add_mouse("brush_grow", MOUSE_BUTTON_WHEEL_UP)

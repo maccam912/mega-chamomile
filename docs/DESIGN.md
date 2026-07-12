@@ -6,7 +6,8 @@ camouflage by painting your own body with colors sampled from the world.
 
 ## Core loop
 
-1. **Lobby** — players join a hosted game, host picks seeker count, starts.
+1. **Lobby** — players join a hosted game, host picks seeker count and map,
+   then starts.
 2. **PAINT phase (90 s)** — Hiders spawn in the map with a pure-white body.
    They sample colors from the world (eyedropper) and paint their own body,
    pick a hiding spot, and settle into position. Seekers wait in a sealed pen
@@ -27,8 +28,10 @@ camouflage by painting your own body with colors sampled from the world.
 
 ## The paint mechanic (MVP implementation)
 
-- The body is a blocky humanoid assembled from **subdivided BoxMeshes**
-  (head, torso, 2 arms, 2 legs) with **vertex-color painting**:
+- The body is a blocky humanoid assembled from **subdivided BoxMeshes** with
+  separate upper/lower limbs, a pelvis, and constrained physics joints at the
+  elbows, knees, hips, shoulders, neck, and waist. Every segment supports
+  **vertex-color painting**:
   - Materials use `vertex_color_use_as_albedo = true` (works in Compatibility).
   - Painting = raycast from the third-person camera crosshair onto your own
     body part, then color every vertex within brush radius of the hit point
@@ -79,6 +82,7 @@ scenes/lobby.tscn       # player list, seeker count, start
 scenes/game.tscn        # Map + Players + HUD + ResultsOverlay
 scenes/player.tscn
 maps/map_basic.tscn     # colored-zone blockout arena
+maps/map_empty.tscn     # editor-authored blank map scaffold
 tests/run_tests.gd      # headless assert-based test suite for MatchState
 assets/                 # copied Kenney CC0 (UI, audio, font)
 docs/DESIGN.md, PROGRESS.md
@@ -88,7 +92,8 @@ docs/DESIGN.md, PROGRESS.md
 
 - WASD move, Space jump, mouse orbit camera (captured), Esc release mouse.
 - Hider: **LMB paint**, **RMB (hold) eyedrop** world color at crosshair,
-  scroll = brush size. Palette bar shows current color.
+  scroll = brush size, **R / Ragdoll button** = lie down or stand back up.
+  Palette bar shows current color.
 - Seeker: **LMB shoot** (cooldown 0.8 s, ammo = 3× hider count).
 
 ## Config defaults (Game.gd)
@@ -100,13 +105,15 @@ docs/DESIGN.md, PROGRESS.md
 | Seek phase | 180 s |
 | Results | 12 s |
 | Seekers | 1 (host-configurable in lobby) |
+| Map | Basic Arena (host-configurable in lobby) |
 | Shot cooldown / ammo | 0.8 s / 3× hiders |
 
 ## Deliberate MVP cuts (future work)
 
-- One map only (`map_basic`); more maps later (user said he'll make them).
+- Two selectable maps: the generated `map_basic` blockout and an intentionally
+  blank, editor-authored `map_empty` scaffold for manual level building.
 - No late-join mid-match, no host migration, no dedicated server build.
 - Vertex-paint resolution is chunky (by design, blocky aesthetic) — texture
   painting is the quality upgrade later.
-- No poses/emotes yet; crouching in place stands in for "posing".
+- Ragdoll provides a natural lying pose; authored poses/emotes are still future work.
 - Lobby is IP-based; no matchmaking/party codes yet.

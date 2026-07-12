@@ -5,6 +5,8 @@ extends CanvasLayer
 const MOVE_HINT := "F paint mode    wheel brush size"
 const PAINT_HINT := "LMB paint yourself    RMB sample color    MMB drag orbit    F done"
 
+signal ragdoll_toggled
+
 var _phase_label: Label
 var _timer_label: Label
 var _role_label: Label
@@ -23,6 +25,7 @@ var _hint_label: Label
 var _cross: ColorRect
 var _paint_mode_label: Label
 var _brush_ring: Control
+var _ragdoll_button: Button
 
 var _time_left := 0.0
 var _counting := false
@@ -166,6 +169,19 @@ func _ready() -> void:
 	_ammo_label.visible = false
 	root.add_child(_ammo_label)
 
+	# Bottom-right ragdoll control. R is always available; the button is also
+	# clickable whenever the cursor is visible (notably while painting).
+	_ragdoll_button = Button.new()
+	_ragdoll_button.text = "R  RAGDOLL"
+	_ragdoll_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_ragdoll_button.position = Vector2(-176, -64)
+	_ragdoll_button.size = Vector2(160, 42)
+	_ragdoll_button.set_meta("interactive_hud", true)
+	_ragdoll_button.pressed.connect(func() -> void:
+		App.play_ui_click()
+		ragdoll_toggled.emit())
+	root.add_child(_ragdoll_button)
+
 	# Big center banner (eliminated, etc.).
 	_center_banner = Label.new()
 	_center_banner.set_anchors_preset(Control.PRESET_CENTER)
@@ -184,6 +200,7 @@ func _ready() -> void:
 	root.add_child(_results)
 
 	_pass_mouse_through(root)
+	_ragdoll_button.mouse_filter = Control.MOUSE_FILTER_STOP
 
 
 ## HUD chrome must never eat input. Controls default to MOUSE_FILTER_STOP, and
@@ -216,7 +233,12 @@ func setup(role: int) -> void:
 	else:
 		_role_label.text = "HIDER"
 		_role_label.add_theme_color_override("font_color", Color("8fd18a"))
-		_hint_label.text = "press F, then paint yourself to match the world.\nC crouch, Esc menu."
+		_hint_label.text = "press F, then paint yourself to match the world.\nR ragdoll, C crouch, Esc menu."
+	_ragdoll_button.visible = role == MatchState.Role.HIDER
+
+
+func set_ragdoll(active: bool) -> void:
+	_ragdoll_button.text = "R  STAND UP" if active else "R  RAGDOLL"
 
 
 func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void:

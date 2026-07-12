@@ -4,7 +4,6 @@ extends Node3D
 ## scoring, validates shots, and broadcasts everything through Net.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
-const MAP_SCENE := preload("res://maps/map_basic.tscn")
 const LOS_INTERVAL := 0.25
 const LOS_MAX_DIST := 40.0
 const LOS_HALF_ANGLE_DEG := 38.0
@@ -30,7 +29,11 @@ var _snd_lose: AudioStream
 
 
 func _ready() -> void:
-	map = MAP_SCENE.instantiate()
+	var map_scene := load(App.selected_map_scene()) as PackedScene
+	if map_scene == null:
+		push_error("Could not load selected map: %s" % App.selected_map_scene())
+		return
+	map = map_scene.instantiate()
 	add_child(map)
 	_build_fall_recovery()
 	players_node = Node3D.new()
@@ -38,6 +41,7 @@ func _ready() -> void:
 	add_child(players_node)
 	hud = preload("res://scripts/hud.gd").new()
 	add_child(hud)
+	hud.ragdoll_toggled.connect(_toggle_local_ragdoll)
 	pause_menu = preload("res://scripts/pause_menu.gd").new()
 	add_child(pause_menu)
 	pause_menu.opened.connect(_set_ui_blocked.bind(true))
@@ -321,6 +325,7 @@ func _process(_delta: float) -> void:
 	if me != null and my_role == MatchState.Role.HIDER:
 		hud.set_swatch(me.current_color, me.brush_radius)
 		hud.set_paint_mode(me.paint_mode)
+		hud.set_ragdoll(me.ragdolled)
 		if me.paint_mode:
 			var mp: Vector2 = get_viewport().get_mouse_position()
 			hud.set_brush_cursor(mp, me.brush_cursor_px(mp), me.current_color)
@@ -330,6 +335,12 @@ func _set_ui_blocked(blocked: bool) -> void:
 	var me := _player(multiplayer.get_unique_id())
 	if me != null:
 		me.set_ui_blocked(blocked)
+
+
+func _toggle_local_ragdoll() -> void:
+	var me := _player(multiplayer.get_unique_id())
+	if me != null:
+		me.toggle_ragdoll()
 
 
 # --- helpers -------------------------------------------------------------------

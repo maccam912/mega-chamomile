@@ -5,8 +5,9 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
 (Compatibility renderer).
 
 - **Hiders** start pure white. Eyedrop colors from the world (RMB), paint
-  yourself (LMB), find a spot, hold still. Bonus points for staying inside a
-  seeker's line of sight without being noticed.
+  yourself (LMB), and use the Ragdoll button or R key to settle into a natural
+  lying pose. Bonus points for staying inside a seeker's line of sight without
+  being noticed.
 - **Seekers** wait blindfolded during the paint phase, then hunt with limited
   ammo before the timer runs out.
 

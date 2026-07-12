@@ -4,6 +4,7 @@ extends Control
 var _player_list: VBoxContainer
 var _start_btn: Button
 var _seeker_spin: SpinBox
+var _map_option: OptionButton
 var _hint: Label
 
 
@@ -69,6 +70,24 @@ func _build_ui() -> void:
 		_seeker_spin.value_changed.connect(
 			func(v: float) -> void: App.settings["seeker_count"] = int(v))
 		row.add_child(_seeker_spin)
+
+		var map_row := HBoxContainer.new()
+		map_row.add_theme_constant_override("separation", 10)
+		box.add_child(map_row)
+		var map_label := Label.new()
+		map_label.text = "Map:"
+		map_row.add_child(map_label)
+		_map_option = OptionButton.new()
+		_map_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for map_id: String in App.MAPS:
+			var index := _map_option.item_count
+			_map_option.add_item(str(App.MAPS[map_id]["label"]))
+			_map_option.set_item_metadata(index, map_id)
+			if map_id == str(App.settings["map_id"]):
+				_map_option.select(index)
+		_map_option.item_selected.connect(func(index: int) -> void:
+			App.select_map(str(_map_option.get_item_metadata(index))))
+		map_row.add_child(_map_option)
 
 		_start_btn = Button.new()
 		_start_btn.text = "START MATCH"

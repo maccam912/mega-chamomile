@@ -25,6 +25,7 @@ var ammo := 0
 var shot_cooldown_left := 0.0
 var frozen := true  ## nobody moves until the first phase broadcast
 var paint_mode := false  ## F: cursor visible, click your body to paint
+var ragdolled := false  ## R/HUD button: release the articulated paintable rig
 var ui_blocked := false  ## pause menu open: swallow all gameplay input
 var respawn_position := Vector3.ZERO  ## assigned match spawn; fall recovery target
 
@@ -33,6 +34,7 @@ var _rig: Node3D
 var _spring: SpringArm3D
 var _camera: Camera3D
 var _nameplate: Label3D
+var _collision: CollisionShape3D
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 var _sync_timer := 0.0
@@ -65,13 +67,13 @@ func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 1
 
-	var col := CollisionShape3D.new()
+	_collision = CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.32
 	capsule.height = 1.7
-	col.shape = capsule
-	col.position = Vector3(0, 0.85, 0)
-	add_child(col)
+	_collision.shape = capsule
+	_collision.position = Vector3(0, 0.85, 0)
+	add_child(_collision)
 
 	body = PaintableBody.new()
 	body.name = "Body"
@@ -150,6 +152,7 @@ func on_phase(new_phase: int, extra: Dictionary) -> void:
 					ammo = extra["ammo"]
 			MatchState.Phase.RESULTS:
 				frozen = true
+				set_ragdoll(false)
 
 
 func set_nameplate_visible(v: bool) -> void:
@@ -157,6 +160,7 @@ func set_nameplate_visible(v: bool) -> void:
 
 
 func on_eliminated() -> void:
+	set_ragdoll(false)
 	eliminated = true
 	body.visible = false
 	body.set_parts_collidable(false)
@@ -186,6 +190,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		brush_radius = minf(brush_radius + 0.02, 0.25)
 	elif event.is_action_pressed("brush_shrink"):
 		brush_radius = maxf(brush_radius - 0.02, 0.05)
+	elif event.is_action_pressed("toggle_ragdoll"):
+		toggle_ragdoll()
 	elif event.is_action_pressed("eyedrop") and _can_paint():
 		_eyedrop()
 
@@ -228,12 +234,16 @@ func _physics_process(delta: float) -> void:
 		if _sync_timer >= SYNC_INTERVAL:
 			_sync_timer = 0.0
 			look_dir = -_camera.global_transform.basis.z
+			var pose: Array = body.capture_pose() if ragdolled else []
 			rpc(&"sync_state", position, rotation.y, look_dir,
-					Input.is_action_pressed("crouch"))
+					Input.is_action_pressed("crouch") and not ragdolled, ragdolled, pose)
 	else:
 		position = position.lerp(_target_pos, minf(1.0, 14.0 * delta))
 		rotation.y = lerp_angle(rotation.y, _target_yaw, minf(1.0, 14.0 * delta))
-		body.scale.y = move_toward(body.scale.y, 0.62 if _target_crouch else 1.0, 3.0 * delta)
+		if ragdolled:
+			body.interpolate_remote_pose(delta)
+		else:
+			body.scale.y = move_toward(body.scale.y, 0.62 if _target_crouch else 1.0, 3.0 * delta)
 		_remote_footsteps(delta)
 
 
@@ -263,6 +273,9 @@ func _local_move(delta: float) -> void:
 	if eliminated:
 		if not ui_blocked:
 			_fly_move(delta)
+		return
+	if ragdolled:
+		velocity = Vector3.ZERO
 		return
 	if frozen or ui_blocked:
 		# No input, but keep gravity so opening the menu mid-jump can't hover.
@@ -351,6 +364,29 @@ func _can_shoot() -> bool:
 	)
 
 
+func _can_ragdoll() -> bool:
+	return role == MatchState.Role.HIDER and not eliminated and not frozen \
+			and (phase == MatchState.Phase.PAINT or phase == MatchState.Phase.SEEK)
+
+
+func toggle_ragdoll() -> void:
+	if ragdolled:
+		set_ragdoll(false)
+	elif _can_ragdoll():
+		set_ragdoll(true)
+
+
+func set_ragdoll(active: bool) -> void:
+	if ragdolled == active or body == null:
+		return
+	ragdolled = active
+	body.scale = Vector3.ONE
+	velocity = Vector3.ZERO
+	if _collision != null:
+		_collision.set_deferred("disabled", active)
+	body.set_ragdoll(active, is_local())
+
+
 ## Sample the brush under a screen point (cursor or crosshair) every frame
 ## while LMB is held. Consecutive hits are joined into a stroke: stamps fill
 ## the segment between them, so fast drags paint lines instead of dots.
@@ -393,11 +429,16 @@ func brush_cursor_px(screen_point: Vector2) -> float:
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func sync_state(pos: Vector3, yaw: float, look: Vector3, crouching: bool) -> void:
+func sync_state(pos: Vector3, yaw: float, look: Vector3, crouching: bool,
+		rigidbody_active: bool, ragdoll_pose: Array) -> void:
 	_target_pos = pos
 	_target_yaw = yaw
 	look_dir = look
 	_target_crouch = crouching
+	if ragdolled != rigidbody_active:
+		set_ragdoll(rigidbody_active)
+	if rigidbody_active:
+		body.set_remote_pose(ragdoll_pose)
 
 
 @rpc("authority", "call_local", "reliable")

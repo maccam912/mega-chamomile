@@ -80,7 +80,7 @@ eliminations, spectator mode, sounds, and HUD.
 - Shooting a real painted hider across two windows; tracer visuals.
 - Feel/tuning: mouse sens, camera distance, brush size, LoS cone width.
 
-### File map (everything is code-built; .tscn files are 3-line shells)
+### File map
 - `autoload/app.gd` — settings, scene transitions, InputMap, CLI flags
   (`--host --join --name --autostart N --fast-phases --quit-after S
   --screenshot path --screenshot-at S`)
@@ -93,6 +93,8 @@ eliminations, spectator mode, sounds, and HUD.
   `scripts/pause_menu.gd` (Esc overlay; match keeps running)
 - `maps/map_basic.gd` — data-driven ZONES array; maps must expose
   `hider_spawns()/seeker_spawns()/set_seek_open(bool)`
+- `maps/map_empty.tscn` — blank editor-authored floor/lighting scaffold;
+  its script only implements the map contract and creates no objects
 - `tests/run_tests.gd` — headless suite
 
 ### Next steps (in rough priority order)
@@ -104,7 +106,8 @@ eliminations, spectator mode, sounds, and HUD.
    shake, waiting-pen ceiling (seekers can currently jump-peek? pen walls are
    3.5m — probably fine), round-start countdown ("3..2..1").
 4. Poses: lean/flatten-against-wall (the third P of the original game).
-5. More maps: copy map_basic.gd, edit ZONES + spawns (contract in the file).
+5. Build out `map_empty.tscn` manually in the editor; it is already selectable
+   from the host's lobby settings.
 6. Later: texture painting upgrade (analytic box UVs), party codes/lobby
    service instead of raw IPs, host migration, late-join spectators.
 

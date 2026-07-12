@@ -1,0 +1,362 @@
+[gd_scene format=3 uid="uid://bhhynpdpsgrvg"]
+
+[ext_resource type="Script" uid="uid://dgkphwjyvm2m5" path="res://maps/map_empty.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/floor-hole.tscn" id="2_umakt"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/barrel-open.tscn" id="2_w0nfc"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/barrel.tscn" id="3_ddxl2"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/floor-old.tscn" id="3_x31xg"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/floor.tscn" id="4_medpw"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/bedroll-frame.tscn" id="4_pxe2m"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/grass-large.tscn" id="5_n6g2i"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/bedroll-packed.tscn" id="5_p18ty"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/grass.tscn" id="6_8kgfo"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/bedroll.tscn" id="6_obosa"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/bottle-large.tscn" id="7_fdpo4"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/metal-panel-narrow.tscn" id="7_usrda"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/bottle.tscn" id="8_h8tw8"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/metal-panel-screws-half.tscn" id="8_ho48y"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/metal-panel-screws-narrow.tscn" id="9_22tw2"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/box-large-open.tscn" id="9_aeyn6"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/box-large.tscn" id="10_725ba"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/metal-panel-screws.tscn" id="10_qqahl"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/metal-panel.tscn" id="11_gihas"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/box-open.tscn" id="11_opdja"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/patch-grass-large.tscn" id="12_x838h"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/box.tscn" id="12_xxx15"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/bucket.tscn" id="13_q1e22"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/patch-grass.tscn" id="13_q1xf4"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/resource-planks.tscn" id="14_ahgvb"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/campfire-fishing-stand.tscn" id="14_qi6be"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/resource-stone-large.tscn" id="15_8bosv"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/campfire-pit.tscn" id="15_58eld"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/campfire-stand.tscn" id="16_rv0el"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/resource-stone.tscn" id="16_vpo67"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/resource-wood.tscn" id="17_hivol"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/chest.tscn" id="17_p0pn7"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/fence-doorway.tscn" id="18_j4knt"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-a.tscn" id="18_xtl68"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/fence-fortified.tscn" id="19_ix7h4"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-b.tscn" id="19_tn4eb"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-c.tscn" id="20_lbgwt"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/fence.tscn" id="20_mrvr4"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-flat-grass.tscn" id="21_daq7x"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/fish-large.tscn" id="21_ocktw"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/fish.tscn" id="22_7h12w"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-flat.tscn" id="22_byg6t"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-sand-a.tscn" id="23_gwnvj"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-sand-b.tscn" id="24_40l4b"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/rock-sand-c.tscn" id="25_lcmkx"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/signpost-single.tscn" id="26_ejm8v"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/signpost.tscn" id="27_udi80"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-canvas.tscn" id="28_p8f56"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-floor.tscn" id="29_ks7r3"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-metal-doorway.tscn" id="30_nu3ly"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-metal-floor.tscn" id="31_wj0nm"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-metal-roof.tscn" id="32_fbrj6"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-metal-wall.tscn" id="33_mr0xj"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-metal.tscn" id="34_53ulk"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure-roof.tscn" id="35_g685o"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/structure.tscn" id="36_jiedk"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tent-canvas-half.tscn" id="37_i8y32"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tent-canvas.tscn" id="38_jf5bu"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tent.tscn" id="39_xauyo"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-axe-upgraded.tscn" id="40_wr4r8"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-axe.tscn" id="41_62btd"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-hammer-upgraded.tscn" id="42_trefy"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-hammer.tscn" id="43_1yaik"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-hoe-upgraded.tscn" id="44_qyljl"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-hoe.tscn" id="45_ynopt"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-pickaxe-upgraded.tscn" id="46_p75cf"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-pickaxe.tscn" id="47_iqicr"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-shovel-upgraded.tscn" id="48_2ui2p"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tool-shovel.tscn" id="49_fdhww"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree-autumn-tall.tscn" id="50_rppdu"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree-autumn-trunk.tscn" id="51_4b2lm"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree-autumn.tscn" id="52_uwcdo"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree-log-small.tscn" id="53_ckrfc"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree-log.tscn" id="54_yb58h"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree-tall.tscn" id="55_nique"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree-trunk.tscn" id="56_ulgth"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/tree.tscn" id="57_vqq0o"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/workbench-anvil.tscn" id="58_eapn7"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/workbench-grind.tscn" id="59_fwn3j"]
+[ext_resource type="PackedScene" path="res://scenes/objects/kenney/workbench.tscn" id="60_g3kdl"]
+
+[sub_resource type="Environment" id="Environment_empty"]
+background_mode = 1
+background_color = Color(0.658824, 0.815686, 0.901961, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+ambient_light_energy = 0.75
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
+albedo_color = Color(0.603922, 0.615686, 0.603922, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_floor"]
+material = SubResource("StandardMaterial3D_floor")
+size = Vector3(48, 1, 48)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
+size = Vector3(48, 1, 48)
+
+[node name="EmptyMap" type="Node3D" unique_id=1123154471]
+script = ExtResource("1_script")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=62538628]
+environment = SubResource("Environment_empty")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1548162330]
+transform = Transform3D(0.8660254, -0.40957603, 0.28678823, 0, 0.57357645, 0.81915206, -0.5, -0.7094065, 0.49673176, 0, 0, 0)
+light_energy = 0.25
+shadow_enabled = true
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=1436598703]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+collision_mask = 0
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor" unique_id=90724564]
+mesh = SubResource("BoxMesh_floor")
+
+[node name="Collision" type="CollisionShape3D" parent="Floor" unique_id=471586688]
+shape = SubResource("BoxShape3D_floor")
+
+[node name="FloorHole" parent="Floor" unique_id=1346969652 instance=ExtResource("2_umakt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.689266, 0.5, 2.5414648)
+
+[node name="FloorOld" parent="Floor" unique_id=1629848556 instance=ExtResource("3_x31xg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.005562, 0.5, 13.016912)
+
+[node name="Floor" parent="Floor" unique_id=964481498 instance=ExtResource("4_medpw")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.134003, 0.5, 10.747819)
+
+[node name="GrassLarge" parent="Floor" unique_id=499956403 instance=ExtResource("5_n6g2i")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.612595, 0.50000095, 3.9166803)
+
+[node name="Grass" parent="Floor" unique_id=1442690216 instance=ExtResource("6_8kgfo")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.469608, 0.5, 0.482275)
+
+[node name="MetalPanelNarrow" parent="Floor" unique_id=1253730490 instance=ExtResource("7_usrda")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.117762, 0.49999905, -6.197315)
+
+[node name="MetalPanelScrewsHalf" parent="Floor" unique_id=868853480 instance=ExtResource("8_ho48y")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.573607, 0.50000095, -12.369118)
+
+[node name="MetalPanelScrewsNarrow" parent="Floor" unique_id=371691292 instance=ExtResource("9_22tw2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.007653, 0.5, 11.702796)
+
+[node name="MetalPanelScrews" parent="Floor" unique_id=901132550 instance=ExtResource("10_qqahl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5908356, 0.50000095, -2.7040424)
+
+[node name="MetalPanel" parent="Floor" unique_id=1415020787 instance=ExtResource("11_gihas")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.366898, 0.5, 4.9797335)
+
+[node name="PatchGrassLarge" parent="Floor" unique_id=981743238 instance=ExtResource("12_x838h")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5687065, 0.5171814, 14.165155)
+
+[node name="PatchGrass" parent="Floor" unique_id=295694508 instance=ExtResource("13_q1xf4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.766703, 0.60579777, -7.2424355)
+
+[node name="ResourcePlanks" parent="Floor" unique_id=817358613 instance=ExtResource("14_ahgvb")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.5654, 0.5, 3.6007185)
+
+[node name="ResourceStoneLarge" parent="Floor" unique_id=63881400 instance=ExtResource("15_8bosv")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -21.349804, 0.5, -1.1594124)
+
+[node name="ResourceStone" parent="Floor" unique_id=246202825 instance=ExtResource("16_vpo67")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.587425, 0.5, -2.2318)
+
+[node name="ResourceWood" parent="Floor" unique_id=1919233500 instance=ExtResource("17_hivol")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.699022, 0.49999905, 0.29626942)
+
+[node name="RockA" parent="Floor" unique_id=1744437761 instance=ExtResource("18_xtl68")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.863684, 0.5, -9.590092)
+
+[node name="RockB" parent="Floor" unique_id=88735111 instance=ExtResource("19_tn4eb")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.2647295, 0.49999905, 1.6066895)
+
+[node name="RockC" parent="Floor" unique_id=747402854 instance=ExtResource("20_lbgwt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.319438, 0.5, -2.3337631)
+
+[node name="RockFlatGrass" parent="Floor" unique_id=895531268 instance=ExtResource("21_daq7x")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.770609, 0.5, -13.462603)
+
+[node name="RockFlat" parent="Floor" unique_id=1756813746 instance=ExtResource("22_byg6t")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.415947, 0.5, 5.8868265)
+
+[node name="RockSandA" parent="Floor" unique_id=1897889203 instance=ExtResource("23_gwnvj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5037365, 0.5, -7.690428)
+
+[node name="RockSandB" parent="Floor" unique_id=129386724 instance=ExtResource("24_40l4b")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.580576, 0.5, -8.931778)
+
+[node name="RockSandC" parent="Floor" unique_id=15814787 instance=ExtResource("25_lcmkx")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.645397, 0.5, 7.2361326)
+
+[node name="SignpostSingle" parent="Floor" unique_id=2080081033 instance=ExtResource("26_ejm8v")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.026851, 0.5, -4.4759083)
+
+[node name="Signpost" parent="Floor" unique_id=1122225405 instance=ExtResource("27_udi80")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.022337, 0.50000095, 2.266286)
+
+[node name="StructureCanvas" parent="Floor" unique_id=64986753 instance=ExtResource("28_p8f56")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.312373, 0.5, -13.521839)
+
+[node name="StructureFloor" parent="Floor" unique_id=1814376147 instance=ExtResource("29_ks7r3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.522085, 0.49999905, 10.788639)
+
+[node name="StructureMetalDoorway" parent="Floor" unique_id=2057631586 instance=ExtResource("30_nu3ly")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.614212, 0.5, 13.904359)
+
+[node name="StructureMetalFloor" parent="Floor" unique_id=315364126 instance=ExtResource("31_wj0nm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.707281, 0.50000095, 8.683676)
+
+[node name="StructureMetalRoof" parent="Floor" unique_id=519258346 instance=ExtResource("32_fbrj6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15821838, 0.5, 13.228863)
+
+[node name="StructureMetalWall" parent="Floor" unique_id=1817338064 instance=ExtResource("33_mr0xj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6496143, 0.5, 0.79151917)
+
+[node name="StructureMetal" parent="Floor" unique_id=500476135 instance=ExtResource("34_53ulk")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.147356, 0.5, -0.37645817)
+
+[node name="StructureRoof" parent="Floor" unique_id=803813569 instance=ExtResource("35_g685o")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.416931, 0.50000095, -9.742998)
+
+[node name="Structure" parent="Floor" unique_id=570765211 instance=ExtResource("36_jiedk")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.403516, 0.50000095, -6.5478134)
+
+[node name="TentCanvasHalf" parent="Floor" unique_id=772517870 instance=ExtResource("37_i8y32")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0304108, 0.49999905, 3.0298128)
+
+[node name="TentCanvas" parent="Floor" unique_id=902190556 instance=ExtResource("38_jf5bu")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.123106, 0.5, 15.191723)
+
+[node name="Tent" parent="Floor" unique_id=1482157659 instance=ExtResource("39_xauyo")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.981905, 0.49999905, 9.939287)
+
+[node name="ToolAxeUpgraded" parent="Floor" unique_id=1626308024 instance=ExtResource("40_wr4r8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.133192, 0.5, 13.082568)
+
+[node name="ToolAxe" parent="Floor" unique_id=236211089 instance=ExtResource("41_62btd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.34713, 0.50000095, 0.20729351)
+
+[node name="ToolHammerUpgraded" parent="Floor" unique_id=1327763753 instance=ExtResource("42_trefy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.17234, 0.5, -0.90714073)
+
+[node name="ToolHammer" parent="Floor" unique_id=1840563119 instance=ExtResource("43_1yaik")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.424303, 0.5, -1.8587284)
+
+[node name="ToolHoeUpgraded" parent="Floor" unique_id=1843317613 instance=ExtResource("44_qyljl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.736288, 0.5, -14.176626)
+
+[node name="ToolHoe" parent="Floor" unique_id=1000732213 instance=ExtResource("45_ynopt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.275289, 0.5, 4.775092)
+
+[node name="ToolPickaxeUpgraded" parent="Floor" unique_id=1346541202 instance=ExtResource("46_p75cf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20.710417, 0.5, 2.163064)
+
+[node name="ToolPickaxe" parent="Floor" unique_id=316155903 instance=ExtResource("47_iqicr")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20.26046, 0.49999905, -1.4341354)
+
+[node name="ToolShovelUpgraded" parent="Floor" unique_id=1821793386 instance=ExtResource("48_2ui2p")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.54685, 0.49999905, -13.772722)
+
+[node name="ToolShovel" parent="Floor" unique_id=431779354 instance=ExtResource("49_fdhww")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.705276, 0.5, 2.718176)
+
+[node name="TreeAutumnTall" parent="Floor" unique_id=1643044481 instance=ExtResource("50_rppdu")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.325346, 0.50000095, 6.111617)
+
+[node name="TreeAutumnTrunk" parent="Floor" unique_id=1195899444 instance=ExtResource("51_4b2lm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.177159, 0.5, -6.1751766)
+
+[node name="TreeAutumn" parent="Floor" unique_id=1402045725 instance=ExtResource("52_uwcdo")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.100893, 0.5, -3.988058)
+
+[node name="TreeLogSmall" parent="Floor" unique_id=1478604816 instance=ExtResource("53_ckrfc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1040726, 0.5, -11.822346)
+
+[node name="TreeLog" parent="Floor" unique_id=1607042138 instance=ExtResource("54_yb58h")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.1189995, 0.81696624, -8.87727)
+
+[node name="TreeTall" parent="Floor" unique_id=1781023550 instance=ExtResource("55_nique")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.386463, 0.5, 16.639442)
+
+[node name="TreeTrunk" parent="Floor" unique_id=1548450339 instance=ExtResource("56_ulgth")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.719578, 0.5, 18.667675)
+
+[node name="Tree" parent="Floor" unique_id=173582500 instance=ExtResource("57_vqq0o")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.997315, 0.5, 11.633691)
+
+[node name="WorkbenchAnvil" parent="Floor" unique_id=1659443777 instance=ExtResource("58_eapn7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.8622093, 0.49999905, 11.127987)
+
+[node name="WorkbenchGrind" parent="Floor" unique_id=1532359452 instance=ExtResource("59_fwn3j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.625432, 0.5, 7.1916065)
+
+[node name="Workbench" parent="Floor" unique_id=1971840769 instance=ExtResource("60_g3kdl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.1302958, 0.5, -1.1957684)
+
+[node name="BarrelOpen" parent="." unique_id=1977354411 instance=ExtResource("2_w0nfc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.869125, -9.536743e-07, -2.7529106)
+
+[node name="Barrel" parent="." unique_id=915201248 instance=ExtResource("3_ddxl2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.630239, 0, 2.2188377)
+
+[node name="BedrollFrame" parent="." unique_id=1686962190 instance=ExtResource("4_pxe2m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.386219, -9.536743e-07, 9.170059)
+
+[node name="BedrollPacked" parent="." unique_id=959113232 instance=ExtResource("5_p18ty")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.393976, 9.536743e-07, -6.953657)
+
+[node name="Bedroll" parent="." unique_id=754537362 instance=ExtResource("6_obosa")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.04768, 0.14999904, 8.045435)
+
+[node name="BottleLarge" parent="." unique_id=1325900867 instance=ExtResource("7_fdpo4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.508394, 0, 5.653406)
+
+[node name="Bottle" parent="." unique_id=726666402 instance=ExtResource("8_h8tw8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.483088, 9.536743e-07, 1.3436995)
+
+[node name="BoxLargeOpen" parent="." unique_id=1797566307 instance=ExtResource("9_aeyn6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.584217, 0, 9.785608)
+
+[node name="BoxLarge" parent="." unique_id=2145125471 instance=ExtResource("10_725ba")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.781771, 0, -6.162594)
+
+[node name="BoxOpen" parent="." unique_id=1032329351 instance=ExtResource("11_opdja")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.692987, 0, 3.8538713)
+
+[node name="Box" parent="." unique_id=508737895 instance=ExtResource("12_xxx15")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.0062656, -9.536743e-07, 4.0067024)
+
+[node name="Bucket" parent="." unique_id=1023662150 instance=ExtResource("13_q1e22")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20.689734, 0, -3.461279)
+
+[node name="CampfireFishingStand" parent="." unique_id=349109509 instance=ExtResource("14_qi6be")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.159054, 9.536743e-07, 7.08375)
+
+[node name="CampfirePit" parent="." unique_id=245620543 instance=ExtResource("15_58eld")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.8951435, 9.536743e-07, 7.08375)
+
+[node name="CampfireStand" parent="." unique_id=986590029 instance=ExtResource("16_rv0el")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.159054, 9.536743e-07, 8.855347)
+
+[node name="Chest" parent="." unique_id=480253264 instance=ExtResource("17_p0pn7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.139735, 0, 4.3721724)
+
+[node name="FenceDoorway" parent="." unique_id=1723640760 instance=ExtResource("18_j4knt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.594162, 0, 1.7091389)
+
+[node name="FenceFortified" parent="." unique_id=250996254 instance=ExtResource("19_ix7h4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.519932, 9.536743e-07, -3.6704063)
+
+[node name="Fence" parent="." unique_id=1477339317 instance=ExtResource("20_mrvr4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.55104, 9.536743e-07, 7.2233486)
+
+[node name="FishLarge" parent="." unique_id=495611569 instance=ExtResource("21_ocktw")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.308754, 6.274105e-05, -2.4528046)
+
+[node name="Fish" parent="." unique_id=2103475064 instance=ExtResource("22_7h12w")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.418726, 0, -2.6570568)
