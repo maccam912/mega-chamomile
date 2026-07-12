@@ -46,9 +46,9 @@ func _build_ui() -> void:
 	if Net.is_server():
 		var lan_ip := LANAddress.preferred(IP.get_local_addresses())
 		ip_hint.text = (
-				"Friends can join at %s:%d" % [lan_ip, App.PORT]
+				"Friends can join at %s" % lan_ip
 				if not lan_ip.is_empty()
-				else "Could not find a LAN IP (port %d)" % App.PORT)
+				else "Could not find a LAN IP")
 	else:
 		ip_hint.text = "Connected to host"
 	ip_hint.add_theme_font_size_override("font_size", 13)

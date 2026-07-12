@@ -673,7 +673,9 @@ character collision, camera, nameplate, targeting, eye, weapon, and preview
 anchors. Selection lives in the network player registry, so peers agree on the
 body and quick replays preserve it. Contract tests cover every roster entry and
 a physics smoke test releases, paints, and restores both animal ragdolls. See
-`docs/AVATARS.md` for the extension checklist.
+`docs/AVATARS.md` for the extension checklist. Uniform authored scaling keeps
+the cat smallest, the dog between cat and human, and every physics/gameplay
+anchor proportional to the rendered body.
 
 **Suggested rollout:**
 

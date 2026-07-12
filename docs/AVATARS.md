@@ -9,6 +9,9 @@ rigid bodies, joints, and replicated ragdoll pose used by `Player`.
 Each avatar has:
 
 - A stable ID and player-facing label.
+- A uniform authored `scale`. Parts, joint anchors, movement collision, camera,
+  gameplay anchors, lobby preview, weapon, and paint-brush radius all derive
+  from it.
 - `parts`: uniquely named boxes with a size, center position, and optional Euler
   rotation. Feet should rest at local `y = 0`; visual forward is `-Z`.
 - `joints`: one less joint than parts, forming a connected tree. Hinges need

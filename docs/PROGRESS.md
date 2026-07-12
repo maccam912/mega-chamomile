@@ -18,9 +18,13 @@ build is so a fresh session can pick up instantly.
   than species branches.
 - Line-of-sight targets and cameras adapt to body height; ragdolled targeting
   follows the moving center of mass.
-- Verified: 166 headless checks pass. Human ragdoll regression passes; cat and
+- Species scale is authored once and applied uniformly to the rig, joints,
+  movement collision, camera offsets, gameplay anchors, gun, ragdoll impulse,
+  stroke spacing, and brush radius. The cat is about 1.0 m tall, the dog about
+  1.25 m, and the human about 1.77 m.
+- Verified: 174 headless checks pass. Human ragdoll regression passes; cat and
   dog physics smoke checks confirm stable settling, ragdoll painting, and pose
-  restoration; a full cat solo round completed PAINT → SEEK → RESULTS.
+  restoration; full cat and dog solo rounds completed PAINT → SEEK → RESULTS.
 
 ## Status: seek-phase hider slowdown shipped (session 8, 2026-07-12)
 

@@ -288,12 +288,14 @@ func test_avatar_contracts() -> void:
 	print("avatar contracts:")
 	check(AvatarCatalogScript.ORDER == ["human", "cat", "dog"],
 			"launch roster contains human, cat, and dog")
+	var authored_heights := {}
 	for avatar_id: String in AvatarCatalogScript.ORDER:
 		var errors := AvatarCatalogScript.contract_errors(avatar_id)
 		check(errors.is_empty(), "%s supplies the complete avatar contract: %s" % [
 				avatar_id, errors])
 		var avatar: PaintableBody = PaintableBodyScript.new()
 		avatar.build(17, Color.WHITE, avatar_id)
+		authored_heights[avatar_id] = _authored_avatar_height(avatar)
 		check(avatar.part_meshes.size() == avatar.parts.size() and not avatar.parts.is_empty(),
 				"%s builds every authored paintable part" % avatar_id)
 		check(avatar.joints.size() == avatar.parts.size() - 1,
@@ -309,6 +311,39 @@ func test_avatar_contracts() -> void:
 		check(avatar.part_bodies[0].transform.is_equal_approx(avatar._authored_transforms[0]),
 				"%s restores its authored standing pose" % avatar_id)
 		avatar.free()
+	check(float(authored_heights["cat"]) < float(authored_heights["dog"]),
+			"cat is physically shorter than dog (%0.2fm < %0.2fm)" % [
+			authored_heights["cat"], authored_heights["dog"]])
+	check(float(authored_heights["dog"]) < float(authored_heights["human"]),
+			"dog is physically shorter than human (%0.2fm < %0.2fm)" % [
+			authored_heights["dog"], authored_heights["human"]])
+	var cat_profile := AvatarCatalogScript.profile("cat")
+	var dog_profile := AvatarCatalogScript.profile("dog")
+	check(float(cat_profile["scale"]) < float(dog_profile["scale"])
+			and float(dog_profile["scale"]) < 1.0,
+			"uniform profile scale orders cat < dog < human")
+	check(float(cat_profile["collision_shapes"][0]["height"])
+			< float(dog_profile["collision_shapes"][0]["height"]),
+			"movement collision scales with the visible animal")
+	var player_script := load("res://scripts/player.gd")
+	check(player_script.default_brush_radius_for_scale(float(cat_profile["scale"]))
+			< player_script.default_brush_radius_for_scale(float(dog_profile["scale"])),
+			"paint brush radius scales with the visible animal")
+
+
+func _authored_avatar_height(body: PaintableBody) -> float:
+	var low := INF
+	var high := -INF
+	for part_idx in body.parts.size():
+		var half_size: Vector3 = body.parts[part_idx]["size"] * 0.5
+		for x in [-1.0, 1.0]:
+			for y in [-1.0, 1.0]:
+				for z in [-1.0, 1.0]:
+					var corner: Vector3 = body.part_bodies[part_idx].transform \
+							* Vector3(half_size.x * x, half_size.y * y, half_size.z * z)
+					low = minf(low, corner.y)
+					high = maxf(high, corner.y)
+	return high - low
 
 
 func test_paint_splat() -> void:

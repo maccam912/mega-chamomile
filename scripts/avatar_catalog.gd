@@ -9,6 +9,7 @@ const ORDER := ["human", "cat", "dog"]
 const AVATARS := {
 	"human": {
 		"label": "Human",
+		"scale": 1.0,
 		"parts": [
 			{"name": "LowerLegL", "size": Vector3(0.22, 0.36, 0.22), "pos": Vector3(-0.13, 0.18, 0)},
 			{"name": "LowerLegR", "size": Vector3(0.22, 0.36, 0.22), "pos": Vector3(0.13, 0.18, 0)},
@@ -47,6 +48,7 @@ const AVATARS := {
 	},
 	"cat": {
 		"label": "Cat",
+		"scale": 0.72,
 		"parts": [
 			{"name": "Torso", "size": Vector3(0.44, 0.38, 0.82), "pos": Vector3(0, 0.67, 0)},
 			{"name": "Chest", "size": Vector3(0.46, 0.43, 0.42), "pos": Vector3(0, 0.72, -0.42)},
@@ -99,6 +101,7 @@ const AVATARS := {
 	},
 	"dog": {
 		"label": "Dog",
+		"scale": 0.88,
 		"parts": [
 			{"name": "Torso", "size": Vector3(0.54, 0.46, 0.92), "pos": Vector3(0, 0.75, 0)},
 			{"name": "Chest", "size": Vector3(0.56, 0.55, 0.48), "pos": Vector3(0, 0.79, -0.46)},
@@ -159,11 +162,27 @@ static func normalize(avatar_id: String) -> String:
 
 
 static func profile(avatar_id: String) -> Dictionary:
-	return AVATARS[normalize(avatar_id)]
+	var data: Dictionary = AVATARS[normalize(avatar_id)].duplicate(true)
+	var avatar_scale := float(data.get("scale", 1.0))
+	for part: Dictionary in data["parts"]:
+		part["size"] = Vector3(part["size"]) * avatar_scale
+		part["pos"] = Vector3(part["pos"]) * avatar_scale
+	for joint: Dictionary in data["joints"]:
+		joint["anchor"] = Vector3(joint["anchor"]) * avatar_scale
+	for shape: Dictionary in data["collision_shapes"]:
+		shape["radius"] = float(shape["radius"]) * avatar_scale
+		shape["height"] = float(shape["height"]) * avatar_scale
+		shape["pos"] = Vector3(shape["pos"]) * avatar_scale
+	for key in ["camera_pivot", "nameplate_position", "target_position",
+			"eye_position", "gun_position"]:
+		data[key] = Vector3(data[key]) * avatar_scale
+	for key in ["orbit_length", "preview_height"]:
+		data[key] = float(data[key]) * avatar_scale
+	return data
 
 
 static func label(avatar_id: String) -> String:
-	return str(profile(avatar_id)["label"])
+	return str(AVATARS[normalize(avatar_id)]["label"])
 
 
 ## Contract validation is intentionally data-level so every future roster entry
@@ -174,11 +193,13 @@ static func contract_errors(avatar_id: String) -> PackedStringArray:
 		errors.append("unknown avatar id")
 		return errors
 	var data: Dictionary = AVATARS[avatar_id]
-	for key in ["label", "parts", "joints", "root_part", "collision_shapes",
+	for key in ["label", "scale", "parts", "joints", "root_part", "collision_shapes",
 			"camera_pivot", "orbit_length",
 			"nameplate_position", "target_position", "eye_position", "gun_position"]:
 		if not data.has(key):
 			errors.append("missing %s" % key)
+	if float(data.get("scale", 0.0)) <= 0.0:
+		errors.append("scale must be positive")
 	var names := {}
 	for part: Dictionary in data.get("parts", []):
 		for key in ["name", "size", "pos"]:

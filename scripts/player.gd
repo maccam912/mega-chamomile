@@ -20,6 +20,10 @@ const SHOOT_RANGE := 60.0
 const NORMAL_CAMERA_PIVOT := Vector3(0, 1.45, 0)
 const ORBIT_SPRING_LENGTH := 2.6
 const CAMERA_LOCAL_OFFSET := Vector3(0, 0, 0.1)
+const BRUSH_DEFAULT := 0.09
+const BRUSH_MIN := 0.05
+const BRUSH_MAX := 0.25
+const BRUSH_STEP := 0.02
 
 var peer_id := 1
 var display_name := "?"
@@ -28,7 +32,7 @@ var role: int = MatchState.Role.NONE
 var phase: int = MatchState.Phase.LOBBY
 var eliminated := false
 var current_color := Color("b5493a")
-var brush_radius := 0.09
+var brush_radius := BRUSH_DEFAULT
 var ammo := 0
 var shot_cooldown_left := 0.0
 var frozen := true  ## nobody moves until the first phase broadcast
@@ -46,6 +50,8 @@ var _collisions: Array[CollisionShape3D] = []
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _camera_pivot := NORMAL_CAMERA_PIVOT
 var _orbit_length := ORBIT_SPRING_LENGTH
+var _avatar_scale := 1.0
+var _camera_local_offset := CAMERA_LOCAL_OFFSET
 
 var _sync_timer := 0.0
 var _stroke_active := false  ## LMB held and last sample hit our body
@@ -81,6 +87,9 @@ func _ready() -> void:
 	collision_mask = 1
 
 	var avatar := AvatarCatalog.profile(avatar_id)
+	_avatar_scale = float(avatar["scale"])
+	brush_radius = default_brush_radius_for_scale(_avatar_scale)
+	_camera_local_offset = CAMERA_LOCAL_OFFSET * _avatar_scale
 	for collision_spec: Dictionary in avatar["collision_shapes"]:
 		var collision := CollisionShape3D.new()
 		var capsule := CapsuleShape3D.new()
@@ -132,12 +141,12 @@ func _ready() -> void:
 		add_child(_rig)
 		_spring = SpringArm3D.new()
 		_spring.spring_length = _orbit_length
-		_spring.position = Vector3(0.35, 0, 0)  # slight over-shoulder offset
+		_spring.position = Vector3(0.35, 0, 0) * _avatar_scale
 		_spring.collision_mask = 1
 		_spring.add_excluded_object(get_rid())
 		_rig.add_child(_spring)
 		_camera = Camera3D.new()
-		_camera.position = CAMERA_LOCAL_OFFSET
+		_camera.position = _camera_local_offset
 		_spring.add_child(_camera)
 		_camera.make_current()
 		_snd_eyedrop = AudioStreamPlayer.new()
@@ -149,7 +158,7 @@ func _ready() -> void:
 func _add_gun() -> void:
 	var gun := MeshInstance3D.new()
 	var m := BoxMesh.new()
-	m.size = Vector3(0.1, 0.12, 0.7)
+	m.size = Vector3(0.1, 0.12, 0.7) * _avatar_scale
 	gun.mesh = m
 	gun.position = body.profile["gun_position"]
 	var mat := StandardMaterial3D.new()
@@ -219,9 +228,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _can_paint():
 			set_paint_mode(true)
 	elif event.is_action_pressed("brush_grow"):
-		brush_radius = minf(brush_radius + 0.02, 0.25)
+		brush_radius = minf(
+				brush_radius + BRUSH_STEP * _avatar_scale, BRUSH_MAX * _avatar_scale)
 	elif event.is_action_pressed("brush_shrink"):
-		brush_radius = maxf(brush_radius - 0.02, 0.05)
+		brush_radius = maxf(
+				brush_radius - BRUSH_STEP * _avatar_scale, BRUSH_MIN * _avatar_scale)
 	elif event.is_action_pressed("toggle_ragdoll"):
 		toggle_ragdoll()
 	elif event.is_action_pressed("eyedrop") and _can_paint():
@@ -375,6 +386,10 @@ func _local_move(delta: float) -> void:
 ## camera-relative.
 static func yaw_for_travel(dir: Vector3) -> float:
 	return atan2(-dir.x, -dir.z)
+
+
+static func default_brush_radius_for_scale(avatar_scale: float) -> float:
+	return BRUSH_DEFAULT * maxf(avatar_scale, 0.0)
 
 
 ## Living hiders lose horizontal evasion speed only during SEEK. Keeping this
@@ -546,7 +561,7 @@ func _enter_ragdoll_fly_camera() -> void:
 	# SpringArm moves direct children to its hit distance. Reset its child to
 	# the zero-length offset now so our preserved-view calculation also matches
 	# the transform it will have on the next physics tick.
-	_camera.position = CAMERA_LOCAL_OFFSET
+	_camera.position = _camera_local_offset
 	var camera_offset := _spring.position + _spring.transform.basis * _camera.position
 	_rig.global_position = view_transform.origin - view_transform.basis * camera_offset
 
@@ -586,7 +601,7 @@ func _paint_sample(screen_point: Vector2) -> void:
 		return  # holding still: nothing new to paint, no RPC spam
 	# Big jumps (cursor flicked across the body, or skimmed off an edge and
 	# back on) get a fresh stamp, not a line drawn through the torso.
-	var from := _stroke_last if gap <= PAINT_MAX_GAP else local_pos
+	var from := _stroke_last if gap <= PAINT_MAX_GAP * _avatar_scale else local_pos
 	rpc(&"apply_stroke", from, local_pos, current_color, brush_radius, local_axis)
 	_stroke_last = local_pos
 

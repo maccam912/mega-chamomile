@@ -172,7 +172,8 @@ func set_ragdoll(active: bool, simulate: bool, inherited_velocity: Vector3 = Vec
 			var fall_direction := (
 					horizontal_motion.normalized() if horizontal_motion.length_squared() > 0.01
 					else -global_transform.basis.z)
-			root.apply_central_impulse(fall_direction * 0.7 + Vector3.UP * 0.08)
+			root.apply_central_impulse(
+					(fall_direction * 0.7 + Vector3.UP * 0.08) * float(profile["scale"]))
 	else:
 		for i in part_bodies.size():
 			var rb := part_bodies[i]
