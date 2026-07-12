@@ -15,6 +15,10 @@ const MAPS := {
 		"label": "Empty Map",
 		"scene": "res://maps/map_empty.tscn",
 	},
+	"hallwyl_museum": {
+		"label": "Hallwyl Museum",
+		"scene": "res://maps/hallwyl_museum.tscn",
+	},
 }
 
 ## Host-configured match settings. The host's copy is authoritative; relevant

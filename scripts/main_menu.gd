@@ -86,11 +86,15 @@ func _build_ui() -> void:
 	box.add_child(quit_btn)
 
 	var footer := Label.new()
-	footer.text = "art & audio: kenney.nl (CC0)"
+	footer.text = (
+		"art & audio: kenney.nl (CC0)\n"
+		+ "Hallwyl Museum: Thomas Flynn / Erik Lernestål (CC BY 4.0)"
+	)
 	footer.add_theme_font_size_override("font_size", 12)
 	footer.add_theme_color_override("font_color", Color("5a6172"))
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	footer.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	footer.position += Vector2(-220, -30)
+	footer.position += Vector2(-470, -50)
 	add_child(footer)
 
 

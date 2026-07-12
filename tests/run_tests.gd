@@ -179,6 +179,9 @@ func test_paint_splat() -> void:
 	var body: PaintableBody = PaintableBodyScript.new()
 	body.build(1, Color.WHITE)
 	check(body.part_meshes.size() == 11, "humanoid has 11 articulated paintable parts")
+	var paint_material := body.part_meshes[0].material_override as StandardMaterial3D
+	check(paint_material.vertex_color_is_srgb,
+			"paint vertex colors use sRGB so eyedropped colors do not render brighter")
 	var total := 0
 	for i in body.part_meshes.size():
 		total += body._part_positions[i].size()
@@ -327,6 +330,15 @@ func test_map_selection() -> void:
 		check(not instance.seeker_spawns().is_empty(), "%s has usable seeker spawns" % map_id)
 		if map_id == "empty":
 			check(instance.get_node_or_null("Floor") != null, "empty map floor is authored in the scene")
+		if map_id == "hallwyl_museum":
+			var museum := instance.get_node_or_null("Museum")
+			var concave_collision_count := 0
+			if museum != null:
+				for child in museum.get_children():
+					if child is CollisionShape3D and child.shape is ConcavePolygonShape3D:
+						concave_collision_count += 1
+			check(concave_collision_count == 13,
+					"Hallwyl Museum has 13 generated concave collision meshes")
 		instance.free()
 	app.select_map("not-a-map")
 	check(app.settings["map_id"] == app.DEFAULT_MAP_ID, "unknown map falls back safely")

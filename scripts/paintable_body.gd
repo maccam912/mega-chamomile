@@ -74,6 +74,10 @@ func build(peer_id: int, base_color: Color) -> void:
 		mi.mesh = mesh
 		var mat := StandardMaterial3D.new()
 		mat.vertex_color_use_as_albedo = true
+		# Eyedropped colors come from the rendered (sRGB) viewport. Without this,
+		# mid-range vertex values are treated as linear and render much brighter
+		# than both the sampled pixel and the HUD swatch.
+		mat.vertex_color_is_srgb = true
 		mat.albedo_color = Color.WHITE
 		mat.roughness = 0.9
 		mi.material_override = mat

@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://maps/hallwyl_museum.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/objects/hallwyl_museum.scn" id="2_model"]
+
+[sub_resource type="Environment" id="Environment_hallwyl"]
+background_mode = 1
+background_color = Color(0.08, 0.09, 0.12, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+ambient_light_energy = 0.8
+reflected_light_source = 2
+
+[node name="HallwylMuseum" type="Node3D"]
+script = ExtResource("1_script")
+metadata/title = "The Hallwyl Museum 1st Floor Combined"
+metadata/creator = "Thomas Flynn"
+metadata/original_models_creator = "Erik Lernestål"
+metadata/source = "https://sketchfab.com/3d-models/the-hallwyl-museum-1st-floor-combined-f74eefe9f1cd4a2795a689451e723ee9"
+metadata/license = "CC BY 4.0"
+metadata/license_url = "https://creativecommons.org/licenses/by/4.0/"
+metadata/changes = "Converted to a Godot game map and supplied with concave collision meshes."
+
+[node name="Museum" parent="." instance=ExtResource("2_model")]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_hallwyl")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-55, 30, 0)
+light_energy = 0.35
+shadow_enabled = true

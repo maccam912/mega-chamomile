@@ -43,3 +43,9 @@ godot --headless -s tests/run_tests.gd
 ## Credits
 
 Art & audio from [Kenney](https://kenney.nl) (CC0). Thanks Kenney!
+
+"[The Hallwyl Museum 1st Floor Combined](https://sketchfab.com/3d-models/the-hallwyl-museum-1st-floor-combined-f74eefe9f1cd4a2795a689451e723ee9)"
+by [Thomas Flynn](https://sketchfab.com/nebulousflynn), based on original museum
+models by [Erik Lernestål](https://www.eriklernestal.com/), is used under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It was converted to
+a Godot game map and supplied with generated concave collision meshes.
