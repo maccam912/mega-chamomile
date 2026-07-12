@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
 
@@ -88,6 +88,96 @@ jobs:
           path: packages/*.zip
           if-no-files-found: error
 
+  launcher-build:
+    name: Build ${{ matrix.label }} launcher
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            label: Linux x86_64
+            runner: ubuntu-latest
+          - platform: windows
+            label: Windows x86_64
+            runner: windows-latest
+          - platform: macos
+            label: macOS Universal
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: launcher/go.mod
+
+      - name: Test launcher
+        working-directory: launcher
+        run: go test ./...
+
+      - name: Build Linux launcher
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p launcher-dist packages
+          (
+            cd launcher
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+              -trimpath \
+              -ldflags "-s -w -X main.repository=${GITHUB_REPOSITORY} -X main.launcherVersion=${GITHUB_SHA}" \
+              -o ../launcher-dist/mega-chamomile-launcher .
+          )
+          tar -C launcher-dist -czf packages/mega-chamomile-launcher-linux-x86_64.tar.gz mega-chamomile-launcher
+
+      - name: Build Windows launcher
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path packages | Out-Null
+          Set-Location launcher
+          $env:CGO_ENABLED = '0'
+          $ldflags = "-s -w -H=windowsgui -X main.repository=$env:GITHUB_REPOSITORY -X main.launcherVersion=$env:GITHUB_SHA"
+          go build -trimpath -ldflags $ldflags -o ../packages/mega-chamomile-launcher-windows-x86_64.exe .
+
+      - name: Build universal macOS launcher app
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="launcher-dist/Mega Chamomile Launcher.app"
+          mkdir -p "$app/Contents/MacOS" packages
+          for arch in amd64 arm64; do
+            (
+              cd launcher
+              CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go build \
+                -trimpath \
+                -ldflags "-s -w -X main.repository=${GITHUB_REPOSITORY} -X main.launcherVersion=${GITHUB_SHA}" \
+                -o "../launcher-dist/launcher-${arch}" .
+            )
+          done
+          lipo -create \
+            launcher-dist/launcher-amd64 \
+            launcher-dist/launcher-arm64 \
+            -output "$app/Contents/MacOS/Mega Chamomile Launcher"
+          cp launcher/packaging/macos/Info.plist "$app/Contents/Info.plist"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$app" \
+            packages/mega-chamomile-launcher-macos-universal.zip
+
+      - name: Upload launcher package
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-${{ matrix.platform }}-${{ github.run_number }}-${{ github.run_attempt }}
+          path: packages/mega-chamomile-launcher-*
+          if-no-files-found: error
+
   verify-macos:
     name: Verify macOS package
     needs: build
@@ -121,15 +211,22 @@ jobs:
     name: Create GitHub Release
     needs:
       - build
+      - launcher-build
       - verify-macos
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download packaged builds
+      - name: Download game and launcher packages
         uses: actions/download-artifact@v4
         with:
-          name: desktop-builds-${{ github.run_number }}-${{ github.run_attempt }}
           path: packages
+          merge-multiple: true
+
+      - name: Create SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd packages && sha256sum mega-* > SHA256SUMS.txt)
 
       - name: Create release
         env:
@@ -139,17 +236,24 @@ jobs:
           set -euo pipefail
           tag="build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           short_sha="${GITHUB_SHA::7}"
-          notes="Automated desktop builds from commit ${GITHUB_SHA}.
+          notes="Automated desktop builds and launchers from commit ${GITHUB_SHA}.
+
+          Launcher installation (recommended):
+          - Windows: download mega-chamomile-launcher-windows-x86_64.exe and double-click it.
+          - macOS: download and extract mega-chamomile-launcher-macos-universal.zip, then open Mega Chamomile Launcher.app.
+          - Linux: download and extract mega-chamomile-launcher-linux-x86_64.tar.gz, then run mega-chamomile-launcher.
+
+          The launcher checks this repository's latest GitHub Release, downloads and verifies the correct game package only when needed, and then starts the game. It can use the last installed version while offline.
 
           macOS installation:
-          1. Extract the ZIP and move Mega Chamomile.app to Applications.
-          2. Control-click Mega Chamomile.app and choose Open.
+          1. Extract the launcher ZIP and optionally move Mega Chamomile Launcher.app to Applications.
+          2. Control-click Mega Chamomile Launcher.app and choose Open the first time.
           3. Click Open in the confirmation dialog.
           4. If Open is not offered, use System Settings > Privacy & Security > Open Anyway.
 
-          The macOS build is universal and ad-hoc signed, but is not notarized because this project does not use a paid Apple Developer account. The Windows build is unsigned."
+          The macOS game and launcher are universal and ad-hoc signed, but are not notarized because this project does not use a paid Apple Developer account. The Windows game and launcher are unsigned."
 
-          gh release create "$tag" packages/*.zip \
+          gh release create "$tag" packages/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Mega Chamomile build ${GITHUB_RUN_NUMBER} (${short_sha})" \

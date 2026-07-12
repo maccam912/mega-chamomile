@@ -18,6 +18,13 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
 Open in Godot 4.7 and press F5. For a local 2-player test, run two instances:
 one hosts, one joins `127.0.0.1`.
 
+For family computers, download the launcher for that operating system from the
+latest GitHub Release once and double-click it. The launcher checks for the
+latest release, downloads and verifies the matching game package when needed,
+then starts the game. It keeps the previous working version available when an
+update fails or the computer is offline. See `launcher/README.md` for platform
+paths and implementation details.
+
 CLI helpers (after `--`): `--name X`, `--host`, `--join <ip>`,
 `--autostart <n>` (host starts when n players present), `--fast-phases`,
 `--quit-after <s>`.
