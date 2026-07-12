@@ -90,7 +90,9 @@ docs/DESIGN.md, PROGRESS.md
 
 ## Controls
 
-- WASD move, Space jump, mouse orbit camera (captured), Esc release mouse.
+- WASD move, Space jump or continuously climb while touching a wall, hold U
+  for 1.25 seconds to return to the assigned spawn, mouse orbit camera
+  (captured), Esc release mouse.
 - Hider: **LMB paint**, **RMB (hold) eyedrop** world color at crosshair,
   scroll = brush size, **R / Ragdoll button** = lie down or stand back up.
   Ragdoll uses WASD/Space/C free-flight; entering paint mode temporarily

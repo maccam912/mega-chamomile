@@ -6,7 +6,10 @@ extends CharacterBody3D
 const SPEED := 5.0
 const CROUCH_SPEED := 2.4
 const JUMP_VELOCITY := 4.6
+const WALL_CLIMB_SPEED := 2.5
 const FLY_SPEED := 8.0
+const UNSTUCK_HOLD_SECONDS := 1.25
+const UNSTUCK_COOLDOWN_SECONDS := 10.0
 const MOUSE_SENS := 0.0025
 const SYNC_INTERVAL := 0.05
 const PAINT_MIN_STEP := 0.35  ## of brush radius: cursor travel before restamping
@@ -50,6 +53,8 @@ var _target_yaw := 0.0
 var _target_crouch := false
 var _yaw_rate := 0.0  ## most recent local turn speed, inherited by ragdoll pieces
 var look_dir := Vector3.FORWARD  ## synced; server uses it for LoS cones
+var _unstuck_hold := 0.0
+var _unstuck_cooldown := 0.0
 
 var _snd_paint: AudioStreamPlayer3D
 var _snd_eyedrop: AudioStreamPlayer
@@ -223,10 +228,17 @@ func set_ui_blocked(blocked: bool) -> void:
 		_update_mouse_mode()
 
 
-func recover_from_fall() -> void:
+func recover_to_spawn() -> void:
+	if ragdolled and body != null:
+		set_ragdoll(false)
 	position = respawn_position
 	velocity = Vector3.ZERO
 	_target_pos = respawn_position
+	_stroke_active = false
+
+
+func recover_from_fall() -> void:
+	recover_to_spawn()
 
 
 func _update_mouse_mode() -> void:
@@ -238,12 +250,14 @@ func _update_mouse_mode() -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_local():
+		var used_unstuck := _update_unstuck(delta)
 		if ragdolled and paint_mode:
 			# The physics rig can keep sliding after it lands. Track its current
 			# mass center so paint-mode orbit never drifts away from the body.
 			_rig.global_position = body.center_of_mass_global()
 		var yaw_before := rotation.y
-		_local_move(delta)
+		if not used_unstuck:
+			_local_move(delta)
 		if not ragdolled:
 			_yaw_rate = clampf(wrapf(rotation.y - yaw_before, -PI, PI) / maxf(delta, 0.001),
 					-12.0, 12.0)
@@ -307,10 +321,10 @@ func _local_move(delta: float) -> void:
 	var crouching := Input.is_action_pressed("crouch")
 	body.scale.y = move_toward(body.scale.y, 0.62 if crouching else 1.0, 3.0 * delta)
 
-	if not is_on_floor():
-		velocity.y -= _gravity * delta
-	elif Input.is_action_just_pressed("jump") and not crouching:
-		velocity.y = JUMP_VELOCITY
+	velocity.y = vertical_velocity_for_movement(
+			velocity.y, is_on_floor(), is_on_wall(),
+			Input.is_action_pressed("jump"), Input.is_action_just_pressed("jump"),
+			crouching, _gravity, delta)
 
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var cam_yaw := _rig.global_rotation.y
@@ -338,6 +352,39 @@ func _local_move(delta: float) -> void:
 ## camera-relative.
 static func yaw_for_travel(dir: Vector3) -> float:
 	return atan2(-dir.x, -dir.z)
+
+
+## Holding jump supplies a steady climb only while airborne and touching a
+## wall. There is intentionally no duration limit: losing wall contact or
+## releasing jump immediately returns the character to ordinary gravity.
+static func vertical_velocity_for_movement(current: float, on_floor: bool,
+		on_wall: bool, jump_pressed: bool, jump_just_pressed: bool,
+		crouching: bool, gravity: float, delta: float) -> float:
+	if on_wall and not on_floor and jump_pressed and not crouching:
+		return WALL_CLIMB_SPEED
+	if not on_floor:
+		return current - gravity * delta
+	if jump_just_pressed and not crouching:
+		return JUMP_VELOCITY
+	return current
+
+
+## Hold-to-confirm keeps an accidental key tap from abandoning a good hiding
+## spot. Frozen players cannot use this to leave the seeker waiting area.
+func _update_unstuck(delta: float) -> bool:
+	_unstuck_cooldown = maxf(0.0, _unstuck_cooldown - delta)
+	var allowed := not eliminated and not frozen and not ui_blocked \
+			and _unstuck_cooldown <= 0.0
+	if not allowed or not Input.is_action_pressed("unstuck"):
+		_unstuck_hold = 0.0
+		return false
+	_unstuck_hold += delta
+	if _unstuck_hold < UNSTUCK_HOLD_SECONDS:
+		return false
+	_unstuck_hold = 0.0
+	_unstuck_cooldown = UNSTUCK_COOLDOWN_SECONDS
+	recover_to_spawn()
+	return true
 
 
 func _fly_move(delta: float) -> void:

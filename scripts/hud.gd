@@ -229,11 +229,11 @@ func setup(role: int) -> void:
 	if role == MatchState.Role.SEEKER:
 		_role_label.text = "SEEKER"
 		_role_label.add_theme_color_override("font_color", Color("ff8a5c"))
-		_hint_label.text = "find the painted hiders. LMB to shoot. Esc menu."
+		_hint_label.text = "find the painted hiders. LMB shoot, Space wall-climb.\nHold U to unstuck, Esc menu."
 	else:
 		_role_label.text = "HIDER"
 		_role_label.add_theme_color_override("font_color", Color("8fd18a"))
-		_hint_label.text = "press F, then paint yourself to match the world.\nR ragdoll, WASD fly cam, Esc menu."
+		_hint_label.text = "F paint, R ragdoll, Space wall-climb.\nHold U to unstuck, Esc menu."
 	_ragdoll_button.visible = role == MatchState.Role.HIDER
 
 

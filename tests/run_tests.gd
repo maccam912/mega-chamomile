@@ -25,6 +25,8 @@ func _initialize() -> void:
 	test_articulated_ragdoll()
 	test_hud_passes_mouse_through()
 	test_travel_facing()
+	test_wall_climb()
+	test_unstuck_action()
 	test_fall_recovery()
 	test_map_selection()
 
@@ -358,6 +360,56 @@ func test_travel_facing() -> void:
 		var facing := Basis(Vector3.UP, yaw) * Vector3.FORWARD
 		check(facing.is_equal_approx(dir),
 				"character faces travel direction %s (got %s)" % [dir, facing])
+
+
+func test_wall_climb() -> void:
+	print("wall climb:")
+	var player_script := load("res://scripts/player.gd")
+	var climbing: float = player_script.vertical_velocity_for_movement(
+			-3.0, false, true, true, false, false, 10.0, 0.1)
+	check(is_equal_approx(climbing, player_script.WALL_CLIMB_SPEED),
+			"holding jump against a wall climbs at the configured speed")
+	var released: float = player_script.vertical_velocity_for_movement(
+			climbing, false, true, false, false, false, 10.0, 0.1)
+	check(is_equal_approx(released, climbing - 1.0),
+			"releasing jump at the wall restores gravity")
+	var open_air: float = player_script.vertical_velocity_for_movement(
+			-3.0, false, false, true, false, false, 10.0, 0.1)
+	check(is_equal_approx(open_air, -4.0),
+			"holding jump without wall contact cannot climb")
+	var jumped: float = player_script.vertical_velocity_for_movement(
+			0.0, true, true, true, true, false, 10.0, 0.1)
+	check(is_equal_approx(jumped, player_script.JUMP_VELOCITY),
+			"Space still performs a normal jump from the floor")
+
+
+func test_unstuck_action() -> void:
+	print("unstuck action:")
+	# SceneTree._initialize runs before the App autoload's deferred _ready, so
+	# register runtime-created actions explicitly for synthetic input here.
+	var app := AppScript.new()
+	app._setup_input_map()
+	check(InputMap.has_action("unstuck"), "unstuck input action is registered")
+	var player = load("res://scripts/player.gd").new()
+	player.frozen = false
+	player.respawn_position = Vector3(8, 1, -8)
+	player.position = Vector3(30, 2, 40)
+	player.velocity = Vector3(2, -3, 4)
+	player._target_pos = player.position
+	Input.action_press("unstuck")
+	player._update_unstuck(player.UNSTUCK_HOLD_SECONDS * 0.5)
+	check(player.position != player.respawn_position,
+			"partial unstuck hold does not teleport")
+	player._update_unstuck(player.UNSTUCK_HOLD_SECONDS * 0.5)
+	check(player.position == player.respawn_position,
+			"full unstuck hold returns to assigned spawn")
+	player.position = Vector3(20, 2, 20)
+	player._update_unstuck(player.UNSTUCK_HOLD_SECONDS)
+	check(player.position != player.respawn_position,
+			"unstuck cooldown prevents an immediate repeat")
+	Input.action_release("unstuck")
+	player.free()
+	app.free()
 
 
 func test_fall_recovery() -> void:

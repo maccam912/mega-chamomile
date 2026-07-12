@@ -15,6 +15,8 @@ requests. It is planning documentation; items are unimplemented unless marked
   phase broadcast that follows the score broadcast (`hud.gd` `on_phase`).
 - `BUG-01` **SHIPPED**: removed the extra half-turn from movement yaw, so the
   character model now faces its travel direction instead of walking backward.
+- `MOVE-01` **SHIPPED**: holding Space climbs continuously while airborne and
+  touching a wall; holding U returns an active player to their assigned spawn.
 
 ## Effort and grouping at a glance
 
@@ -37,7 +39,7 @@ after investigation, especially for bugs.
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
 | `UI-02` | M | High | `UI-01`, `BRAND-01` | A focused main-menu layout, styling, motion, and audio pass without changing game rules. |
 | `SCORE-02` | M | High | `ROUND-01`, `ROLE-01` | Needs session-lifetime player identity and score state. |
-| `MOVE-01` | M | Medium | `AVATAR-01` physics playtest | Collision checks, exploit limits, and networked movement make this more than a jump tweak. |
+| `MOVE-01` | **SHIPPED** | High | Movement regression tests | Continuous climbing requires wall contact; hold-to-confirm unstuck has a cooldown and is disabled while frozen. |
 | `ROUND-01` | M–L | High | `ROLE-01`, `SCORE-02` | Replay UI is small; reliably resetting a round while preserving session state is the larger part. |
 | `ROLE-01` | L | High | `ROUND-01`, `SCORE-02` | Adds persistent history, preference UI, a fairness algorithm, replication, and many rule tests. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
@@ -92,28 +94,29 @@ stable.
   synchronization.
 - A regression test covers all four cardinal travel directions.
 
-### MOVE-01: Recover from walls and climb or float upward
+### MOVE-01: Recover from walls and climb upward — **SHIPPED**
 
 **Problem:** A player can become stuck against or inside level collision.
 
-**Requested behavior:** Holding Space while blocked should give the player a
-controlled way to move upward, such as a slow climb/float. Releasing Space
-restores normal gravity. This should complement the existing under-map recovery.
+**Resolution:** While airborne and touching a wall, holding Space supplies a
+steady upward climbing speed. Climbing has no duration limit, but stops as soon
+as Space is released or wall contact is lost. As a fallback, holding U for 1.25
+seconds returns an active player to their assigned spawn; a 10-second cooldown
+prevents rapid reuse, and frozen seekers cannot use it to escape their pen.
 
 **Acceptance criteria:**
 
-- Holding Space near a blocking wall moves the player upward at a limited,
-  tunable speed after a short eligibility check.
+- Holding Space while airborne and in wall contact moves the player upward at
+  a limited, tunable speed for as long as contact is maintained.
 - Releasing Space immediately returns the player to normal gravity.
-- The mechanic cannot be used to fly indefinitely in open space or escape the
-  playable map.
+- The mechanic cannot be used to fly in open space because it requires wall
+  contact; maps should treat wall climbing as normal traversal.
 - Server/peer movement remains synchronized.
-- Add a fallback unstuck action or automatic safe-spawn reset for geometry
-  cases the movement assist cannot solve.
+- Holding U returns an active player to their assigned spawn after a short
+  confirmation, with a cooldown to limit accidental or repeated use.
 
-**Design decision needed:** Choose between wall-climb, short hover, or a hybrid.
-The preferred first prototype is a short wall-assisted climb because it fixes
-the reported problem without turning Space into unrestricted flight.
+**Chosen design:** Continuous wall-assisted climbing with no duration limit.
+Wall contact is the eligibility condition; open-air hovering is not allowed.
 
 ## P1 — Make consecutive rounds easy and fair
 
@@ -826,10 +829,11 @@ playtest results, not solely by implementation effort.
 
 ### Climbing affects map boundaries
 
-Wall-assisted movement can invalidate seeker pens and level boundaries. Mark
-surfaces or areas where climbing is allowed, or require a strict combination of
-wall contact, height limit, and short duration. Paint Tag ghosts should not gain
-extra wall traversal beyond the normal player movement rules.
+Wall-assisted movement makes climbable walls normal traversal, so seeker pens
+and level boundaries must use ceilings, overhangs, or other geometry where
+escape matters. Climbing requires wall contact but deliberately has no height or
+duration limit. Paint Tag ghosts should not gain extra wall traversal beyond the
+normal player movement rules.
 
 ### Replay ownership and readiness
 
