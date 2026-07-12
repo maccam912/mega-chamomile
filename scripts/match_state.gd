@@ -28,7 +28,7 @@ var cfg := {
 var phase: int = Phase.LOBBY
 var time_left := 0.0
 var winner: int = Team.NOBODY
-## id -> {name, role, alive, survival, bold, kills, bonus, in_sight, cooldown, ammo}
+## id -> {name, role, alive, hidden, survival, bold, kills, bonus, in_sight, cooldown, ammo}
 ## A player's total score is derived from the components (see score_of), so the
 ## results breakdown can never disagree with the total.
 var players := {}
@@ -45,6 +45,7 @@ func add_player(id: int, pname: String) -> void:
 		"name": pname,
 		"role": Role.NONE,
 		"alive": true,
+		"hidden": false,
 		"survival": 0.0,  # points from time alive during SEEK
 		"bold": 0.0,      # extra points from time in a seeker's sight
 		"kills": 0,       # hiders found (seekers only)
@@ -84,6 +85,8 @@ func assign_roles(seeker_count: int, seed_val: int = -1) -> void:
 
 func start() -> void:
 	winner = Team.NOBODY
+	for id: int in players:
+		players[id]["hidden"] = false
 	_enter_phase(Phase.PAINT)
 
 
@@ -140,6 +143,39 @@ func report_hit(shooter_id: int, victim_id: int) -> bool:
 func set_in_sight(id: int, value: bool) -> void:
 	if players.has(id):
 		players[id]["in_sight"] = value
+
+
+## Hiders may confirm or undo readiness only while the paint timer is active.
+func set_hidden(id: int, value: bool) -> bool:
+	if phase != Phase.PAINT or not players.has(id):
+		return false
+	var p: Dictionary = players[id]
+	if p["role"] != Role.HIDER or not p["alive"]:
+		return false
+	p["hidden"] = value
+	return true
+
+
+func hidden_hiders() -> Array:
+	var out := []
+	for id: int in players:
+		if players[id]["role"] == Role.HIDER and players[id]["hidden"]:
+			out.append(id)
+	return out
+
+
+func all_hiders_hidden() -> bool:
+	var all_hiders := hiders()
+	return not all_hiders.is_empty() and hidden_hiders().size() == all_hiders.size()
+
+
+## The host calls this explicitly after everyone is ready; readiness itself
+## never advances the phase silently.
+func start_seek_early() -> bool:
+	if phase != Phase.PAINT or not all_hiders_hidden():
+		return false
+	_enter_phase(Phase.SEEK)
+	return true
 
 
 func alive_hiders() -> Array:

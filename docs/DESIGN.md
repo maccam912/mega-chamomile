@@ -98,13 +98,15 @@ docs/DESIGN.md, PROGRESS.md
   for 1.25 seconds to return to the assigned spawn, mouse orbit camera
   (captured), Esc release mouse.
 - Hider: **LMB paint**, **RMB (hold) eyedrop** world color at crosshair,
-  scroll = brush size, **R / Ragdoll button** = lie down or stand back up.
+  scroll = brush size, **R / Ragdoll button** = lie down or stand back up,
+  **H** = confirm/undo hidden readiness during PAINT.
   Ragdoll uses WASD/Space/C free-flight; entering paint mode temporarily
   returns the camera to an orbit around the body's live center of mass.
   Entering ragdoll preserves the player's linear and angular point velocities
   across all articulated body segments.
   Palette bar shows current color.
 - Seeker: **LMB shoot** (cooldown 0.8 s, ammo = 3× hider count).
+- Host: **Enter** starts SEEK early once every active hider is ready.
 
 ## Config defaults (Game.gd)
 

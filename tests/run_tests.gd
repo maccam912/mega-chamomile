@@ -20,6 +20,7 @@ func _initialize() -> void:
 	test_bold_scoring()
 	test_score_breakdown()
 	test_session_scoring_and_replay()
+	test_hidden_readiness()
 	test_disconnect_wins()
 	test_solo_mode()
 	test_paint_splat()
@@ -214,6 +215,35 @@ func test_session_scoring_and_replay() -> void:
 	check(not session.totals.has(2), "disconnect removes score identity instead of allowing inheritance")
 
 
+func test_hidden_readiness() -> void:
+	print("hidden readiness + early seek:")
+	var ms := _make(3, 1, {"paint_time": 100.0})
+	ms.start()
+	var seeker: int = ms.seekers()[0]
+	var hiders: Array = ms.hiders()
+	check(not ms.all_hiders_hidden(), "paint phase begins with hiders unready")
+	check(not ms.set_hidden(seeker, true), "seekers cannot mark themselves hidden")
+	check(ms.set_hidden(hiders[0], true), "active hider can confirm hidden")
+	check(ms.hidden_hiders() == [hiders[0]], "readiness tracks the confirming hider")
+	check(not ms.start_seek_early(), "host cannot skip while a hider is unready")
+	check(ms.set_hidden(hiders[0], false) and ms.hidden_hiders().is_empty(),
+			"hider can undo readiness during paint")
+	ms.set_hidden(hiders[0], true)
+	ms.set_hidden(hiders[1], true)
+	check(ms.all_hiders_hidden(), "all active hiders can become ready")
+	check(ms.start_seek_early() and ms.phase == MatchState.Phase.SEEK,
+			"explicit host action starts seeking before the paint timer")
+	check(not ms.set_hidden(hiders[0], false), "readiness locks once seeking begins")
+
+	var ms2 := _make(3, 1, {"paint_time": 100.0})
+	ms2.start()
+	var remaining: Array = ms2.hiders()
+	ms2.set_hidden(remaining[0], true)
+	ms2.remove_player(remaining[1])
+	check(ms2.hiders().size() == 1 and ms2.all_hiders_hidden(),
+			"disconnect updates the required ready count")
+
+
 func test_disconnect_wins() -> void:
 	print("disconnect handling:")
 	var ms := _make(3, 1)
@@ -387,6 +417,18 @@ func test_hud_passes_mouse_through() -> void:
 	check(hud._results.visible, "RESULTS phase change keeps the scoreboard visible")
 	hud.on_phase(MatchStateScript.Phase.PAINT, 5.0, MatchStateScript.Role.HIDER, {})
 	check(not hud._results.visible, "next round's PAINT phase clears the scoreboard")
+	hud.setup(MatchStateScript.Role.HIDER, true)
+	hud.set_hiding_readiness(1, 2, true)
+	check(hud._hidden_status.text == "HIDERS READY  1 / 2" and hud._start_seek_button.disabled,
+			"paint HUD shows readiness progress without unlocking early seek")
+	hud.set_hiding_readiness(2, 2, true)
+	check(not hud._start_seek_button.disabled,
+			"host early-seek action unlocks when every hider is ready")
+	var app := AppScript.new()
+	app._setup_input_map()
+	check(InputMap.has_action("toggle_hidden") and InputMap.has_action("start_seeking_early"),
+			"readiness keyboard actions are registered")
+	app.free()
 	hud.free()
 
 

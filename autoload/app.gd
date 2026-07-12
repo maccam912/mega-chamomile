@@ -126,6 +126,8 @@ func _setup_input_map() -> void:
 	_add_key("toggle_paint_mode", KEY_F)
 	_add_key("toggle_ragdoll", KEY_R)
 	_add_key("unstuck", KEY_U)
+	_add_key("toggle_hidden", KEY_H)
+	_add_key("start_seeking_early", KEY_ENTER)
 	_add_mouse("primary_action", MOUSE_BUTTON_LEFT)   # paint (hider) / shoot (seeker)
 	_add_mouse("eyedrop", MOUSE_BUTTON_RIGHT)
 	_add_mouse("brush_grow", MOUSE_BUTTON_WHEEL_UP)

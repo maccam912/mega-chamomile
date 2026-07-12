@@ -8,6 +8,8 @@ const PAINT_HINT := "LMB paint yourself    RMB sample color    MMB drag orbit   
 signal ragdoll_toggled
 signal replay_ready_toggled(ready: bool)
 signal replay_start_requested
+signal hidden_toggled(hidden: bool)
+signal start_seeking_requested
 
 var _phase_label: Label
 var _timer_label: Label
@@ -32,6 +34,12 @@ var _replay_ready_button: CheckButton
 var _replay_start_button: Button
 var _replay_status: Label
 var _is_replay_host := false
+var _hidden_status: Label
+var _hidden_controls: HBoxContainer
+var _hidden_toggle: CheckButton
+var _start_seek_button: Button
+var _is_hider := false
+var _is_host := false
 
 var _time_left := 0.0
 var _counting := false
@@ -101,6 +109,12 @@ func _ready() -> void:
 	_paint_mode_label.add_theme_color_override("font_color", Color("8fd18a"))
 	_paint_mode_label.visible = false
 	top.add_child(_paint_mode_label)
+	_hidden_status = Label.new()
+	_hidden_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hidden_status.add_theme_font_size_override("font_size", 16)
+	_hidden_status.add_theme_color_override("font_color", Color("e0b34d"))
+	_hidden_status.visible = false
+	top.add_child(_hidden_status)
 
 	# Role card, top-left.
 	_role_label = Label.new()
@@ -188,6 +202,33 @@ func _ready() -> void:
 		ragdoll_toggled.emit())
 	root.add_child(_ragdoll_button)
 
+	# Paint-phase readiness, above the palette/ammo row. Keyboard shortcuts keep
+	# both actions available while the mouse is captured.
+	_hidden_controls = HBoxContainer.new()
+	_hidden_controls.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hidden_controls.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hidden_controls.position.y = -112
+	_hidden_controls.add_theme_constant_override("separation", 12)
+	_hidden_controls.visible = false
+	root.add_child(_hidden_controls)
+	_hidden_toggle = CheckButton.new()
+	_hidden_toggle.text = "H  I'M HIDDEN"
+	_hidden_toggle.custom_minimum_size = Vector2(220, 42)
+	_hidden_toggle.set_meta("interactive_hud", true)
+	_hidden_toggle.toggled.connect(func(hidden: bool) -> void:
+		App.play_ui_click()
+		hidden_toggled.emit(hidden))
+	_hidden_controls.add_child(_hidden_toggle)
+	_start_seek_button = Button.new()
+	_start_seek_button.text = "ENTER  START SEEKING NOW"
+	_start_seek_button.custom_minimum_size = Vector2(260, 42)
+	_start_seek_button.disabled = true
+	_start_seek_button.set_meta("interactive_hud", true)
+	_start_seek_button.pressed.connect(func() -> void:
+		App.play_ui_click()
+		start_seeking_requested.emit())
+	_hidden_controls.add_child(_start_seek_button)
+
 	# Big center banner (eliminated, etc.).
 	_center_banner = Label.new()
 	_center_banner.set_anchors_preset(Control.PRESET_CENTER)
@@ -207,6 +248,8 @@ func _ready() -> void:
 
 	_pass_mouse_through(root)
 	_ragdoll_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	_hidden_toggle.mouse_filter = Control.MOUSE_FILTER_STOP
+	_start_seek_button.mouse_filter = Control.MOUSE_FILTER_STOP
 
 
 ## HUD chrome must never eat input. Controls default to MOUSE_FILTER_STOP, and
@@ -231,7 +274,9 @@ func _process(delta: float) -> void:
 		_spotted_label.modulate.a = 0.6 + 0.4 * sin(_spot_pulse)
 
 
-func setup(role: int) -> void:
+func setup(role: int, is_host := false) -> void:
+	_is_hider = role == MatchState.Role.HIDER
+	_is_host = is_host
 	if role == MatchState.Role.SEEKER:
 		_role_label.text = "SEEKER"
 		_role_label.add_theme_color_override("font_color", Color("ff8a5c"))
@@ -239,8 +284,10 @@ func setup(role: int) -> void:
 	else:
 		_role_label.text = "HIDER"
 		_role_label.add_theme_color_override("font_color", Color("8fd18a"))
-		_hint_label.text = "F paint, R ragdoll, Space wall-climb.\nHold U to unstuck, Esc menu."
+		_hint_label.text = "F paint, R ragdoll, H hidden, Space wall-climb.\nHold U to unstuck, Esc menu."
 	_ragdoll_button.visible = role == MatchState.Role.HIDER
+	_hidden_toggle.visible = _is_hider
+	_start_seek_button.visible = _is_host
 
 
 func set_ragdoll(active: bool) -> void:
@@ -259,15 +306,31 @@ func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void
 			_phase_label.text = "PAINT PHASE — blend in"
 			_blindfold.visible = role == MatchState.Role.SEEKER
 			_bottom_hider.visible = role == MatchState.Role.HIDER
+			_hidden_status.visible = true
+			_hidden_controls.visible = _is_hider or _is_host
 		MatchState.Phase.SEEK:
 			_phase_label.text = "SEEK PHASE — they're coming"
 			_blindfold.visible = false
+			_hidden_status.visible = false
+			_hidden_controls.visible = false
 			if role == MatchState.Role.SEEKER and extra.has("ammo"):
 				set_ammo(int(extra["ammo"]))
 		MatchState.Phase.RESULTS:
 			_phase_label.text = "RESULTS"
 			_blindfold.visible = false
 			_spotted_label.visible = false
+			_hidden_status.visible = false
+			_hidden_controls.visible = false
+
+
+func set_hiding_readiness(hidden_count: int, hider_count: int, my_hidden: bool) -> void:
+	var everyone_hidden := hider_count > 0 and hidden_count == hider_count
+	_hidden_status.text = "HIDERS READY  %d / %d" % [hidden_count, hider_count]
+	_hidden_status.add_theme_color_override(
+			"font_color", Color("8fd18a") if everyone_hidden else Color("e0b34d"))
+	_hidden_toggle.set_pressed_no_signal(my_hidden)
+	_hidden_toggle.text = "H  HIDDEN — PRESS TO UNDO" if my_hidden else "H  I'M HIDDEN"
+	_start_seek_button.disabled = not everyone_hidden
 
 
 func set_swatch(color: Color, brush: float) -> void:

@@ -6,6 +6,9 @@ requests. It is planning documentation; items are unimplemented unless marked
 
 **Shipped so far (2026-07-12):**
 
+- `HIDE-01` **SHIPPED**: hiders can confirm or undo readiness during PAINT;
+  everyone sees an aggregate count, and the host can release seekers early
+  once every active hider is ready.
 - `ROUND-01` **SHIPPED**: every player can ready up from results; once all
   connected players opt in, the host can immediately reload the game scene for
   another round without breaking up the lobby.
@@ -41,14 +44,18 @@ after investigation, especially for bugs.
 | `UI-01` | S–M | High | `UI-02`, `SETTINGS-01` | Central display scaling and theme sizing should address most Retina/Windows inconsistency, followed by a screen audit. |
 | `REVEAL-01` | S pose preservation / M full reveal | Medium | `ROUND-01`, results presentation | Keeping ragdoll state should be small; synchronized highlights and seeker-only results movement cross gameplay and rendering systems. |
 | `SCORE-01` | S–M | High | `SCORE-02`, `SETTINGS-01` | The core survival and line-of-sight scoring already exists; breakdowns and configuration are the new work. |
-| `HIDE-01` | M | High | `ROUND-01`, `CAMERA-01` | A contained ready-state and phase-transition feature. |
+| `HIDE-01` | **SHIPPED** | High | `ROUND-01`, `CAMERA-01` | Server-authoritative readiness gates an explicit host early-start action. |
+| `ROUND-02` | S | High | `MOVE-02`, round-end rules | The server already owns ammo and round completion; the final shot must resolve before checking for total ammo exhaustion. |
+| `MOVE-02` | S | High | `ROUND-02`, `SETTINGS-01` | Apply a seek-phase-only 0.2 multiplier to living hiders while leaving seekers and the paint phase unchanged. |
 | `PAINT-01` | **SHIPPED** | High | Paint regression tests | Camera-ray-aligned cylindrical strokes paint front and hidden back surfaces while retaining the brush footprint. |
 | `NET-01` | M | High | Lobby and main-menu UI | LAN discovery can advertise existing ENet hosts and present them in a join list while retaining manual IP as a fallback. |
 | `CAMERA-01` | M | Medium | `HIDE-01`, existing spectator camera | Eliminated-player spectating may be reusable, but living-hider control locking needs care. |
 | `UI-02` | M | High | `UI-01`, `BRAND-01` | A focused main-menu layout, styling, motion, and audio pass without changing game rules. |
 | `SCORE-02` | **SHIPPED** | High | `ROUND-01`, `ROLE-01` | Session totals use live peer identity and survive round scene reloads. |
 | `MOVE-01` | **SHIPPED** | High | Movement regression tests | Continuous climbing requires wall contact; hold-to-confirm unstuck has a cooldown and is disabled while frozen. |
+| `MOVE-03` | S–M | High | `MOVE-01`, Hallwyl map collision | Add map-specific perimeter recovery plus authoritative position validation so near-map escapes return players safely instead of leaving them outside. |
 | `ROUND-01` | **SHIPPED** | High | `ROLE-01`, `SCORE-02` | Results readiness gates a host-controlled same-session scene reload. |
+| `ROUND-03` | XS–S | High | `ROUND-01`, results presentation | Remove the RESULTS countdown and keep ready-up available until the lobby deliberately continues or leaves. |
 | `ROLE-01` | L | High | `ROUND-01`, `SCORE-02` | Adds persistent history, preference UI, a fairness algorithm, replication, and many rule tests. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
@@ -76,6 +83,14 @@ These are good candidates when a small, independent improvement is wanted:
    bold, finds, end bonus).
 8. Prototype a uniformly enlarged copy of one map for `AVATAR-01` — this may
    deliver the smaller-character feel without changing player physics.
+9. `ROUND-02` — end seeking as soon as every remaining seeker has spent all
+   ammunition, after resolving the final shot.
+10. `MOVE-02` — reduce living hiders to one-fifth movement speed once seeking
+    starts.
+11. `MOVE-03` — add automatic Hallwyl perimeter recovery for players who slip
+    just outside the museum without falling into the existing recovery plane.
+12. `ROUND-03` — remove the final results-screen timeout so players have as long
+    as they need to review scores and ready up.
 
 `AVATAR-01` may look like a simple scale change but should not be treated as a
 quick body-scaling win because the current character is an articulated physics
@@ -126,6 +141,46 @@ prevents rapid reuse, and frozen seekers cannot use it to escape their pen.
 **Chosen design:** Continuous wall-assisted climbing with no duration limit.
 Wall contact is the eligibility condition; open-air hovering is not allowed.
 
+### MOVE-03: Recover players who escape the museum perimeter
+
+**Problem:** Players can noclip or climb through gaps in the Hallwyl Museum's
+collision and remain close to the building but outside the playable map. The
+existing fall-recovery plane catches players only after they drop far below the
+level, while manual unstuck requires the escaped player to notice the problem
+and hold the recovery key.
+
+**Requested behavior:** Add layered, map-specific failsafes that automatically
+return an active player to their assigned safe spawn when they leave the
+Hallwyl Museum's playable bounds, including near-ground areas immediately
+outside its walls. Keep the existing under-map recovery and manual unstuck as
+fallbacks, and repair confirmed collision holes where practical.
+
+**Acceptance criteria:**
+
+- Define the Hallwyl Museum's valid playable region explicitly; do not use a
+  loose world-sized box that treats the exterior beside the building as valid.
+- Perimeter and under-map recovery cover every side and corner of the museum,
+  including places reachable by wall climbing, ragdoll motion, or squeezing
+  through collision seams.
+- Crossing a recovery boundary returns the player to their assigned safe spawn,
+  clears unsafe velocity/interpolation targets, and avoids repeated teleport
+  loops at the destination.
+- Legitimate interior rooms, stairs, upper floors, doorways, and any intended
+  courtyards or roof areas do not trigger recovery.
+- The host validates synchronized player positions against the active map's
+  bounds so a client cannot remain outside merely by missing or bypassing a
+  local `Area3D` trigger.
+- Recovery preserves role, paint, score, ammo, phase, and elimination state;
+  define whether an active ragdoll stands up on recovery and apply that behavior
+  consistently.
+- The safety check works during PAINT and SEEK without releasing a frozen seeker
+  early or granting an escaped player an advantageous destination.
+- Add map regression tests for representative points just beyond each perimeter
+  edge, all corners, below the floor, known collision gaps, and valid points
+  near the boundary.
+- Playtest the repaired collision and recovery volumes with normal movement,
+  continuous wall climbing, crouching, jumping, and ragdoll motion.
+
 ## P1 — Make consecutive rounds easy and fair
 
 ### ROUND-01: Quick replay from results — **SHIPPED**
@@ -149,6 +204,36 @@ and eliminations while the `Net` autoload preserves lobby-session state.
 - Roles are assigned again using `ROLE-01`; the previous assignment is not
   blindly reused.
 - Players who do not opt in yet see a clear waiting/confirmation state.
+
+### ROUND-03: Keep the final results screen open indefinitely
+
+**Problem:** The final RESULTS screen currently lasts only about ten seconds.
+That is not enough time for everyone to review the scoreboard, discuss the
+round, and mark themselves ready for the next one.
+
+**Requested behavior:** Remove the automatic RESULTS timeout. The end screen
+and its ready-up controls should remain available without a time limit until
+the players deliberately start the next round, return to the lobby, or leave
+the session.
+
+**Acceptance criteria:**
+
+- Entering RESULTS no longer starts a countdown toward `DONE`, lobby return, or
+  any other automatic scene transition.
+- The HUD does not show a misleading results countdown or urgency warning.
+- Every connected player can toggle **Ready for Next Round** at any time while
+  the results screen remains open.
+- Becoming ready does not automatically start the next round; the host's
+  existing **Start Next Round** action remains the deliberate transition and
+  unlocks under the readiness rules from `ROUND-01`.
+- A player who never readies up can keep the results screen open indefinitely;
+  explicit leave/return actions remain available so nobody is trapped there.
+- Joins, disconnects, and readiness changes update the required ready count
+  without restoring a timer or silently advancing the phase.
+- Score snapshots, cumulative session totals, surviving poses, and reveal state
+  remain stable no matter how long RESULTS stays open.
+- Headless tests tick RESULTS well beyond the old duration and confirm that it
+  remains active until an explicit replay or exit action occurs.
 
 ### ROLE-01: Preference-aware, fair role assignment
 
@@ -189,7 +274,6 @@ preferences when possible while rotating seeker duty fairly.
 
 - Hiding/painting duration
 - Seeking duration
-- Results duration
 - Number of seekers
 - Ammo per seeker (support a fixed amount; optionally retain the current
   per-hider multiplier as a separate mode)
@@ -210,11 +294,19 @@ preferences when possible while rotating seeker duty fairly.
   to the player count in a normal multiplayer round.
 - Replay preserves the lobby's chosen settings unless the host changes them.
 
-### HIDE-01: Hiders can report ready and finish hiding early
+### HIDE-01: Hiders can report ready and finish hiding early — **SHIPPED**
 
 **Requested behavior:** During the hiding/painting phase, each hider can mark
 themselves **Hidden**. When every active hider is marked hidden, the host can
 skip the remaining countdown and begin seeking.
+
+**Resolution:** During PAINT, an active hider can use the HUD control or press
+`H` to confirm and undo readiness. Every peer receives only the aggregate
+`ready / total` count plus its own state. When all current hiders are ready, the
+host's **Start Seeking Now** control unlocks (`Enter` is the captured-mouse
+shortcut); readiness alone never changes phase. The server revalidates role,
+phase, and the complete active-hider set for every request and rebroadcasts the
+count after disconnects.
 
 **Acceptance criteria:**
 
@@ -227,6 +319,64 @@ skip the remaining countdown and begin seeking.
   seeking does not begin silently.
 - The normal countdown still starts seeking if players never mark themselves
   hidden.
+
+## P1 — Tighten seek-phase pacing
+
+### ROUND-02: End the round when all seekers are out of ammo
+
+**Problem:** Once every seeker has completely exhausted their ammunition, they
+cannot eliminate another hider. Letting the seek timer continue only prolongs a
+round whose outcome can no longer change.
+
+**Requested behavior:** During SEEK, finish the round early with a hider win as
+soon as all active seekers have zero ammunition and at least one hider remains
+alive. Resolve the shot that consumed the final round before evaluating ammo
+exhaustion so a last-shot hit can still eliminate its target or complete a
+seeker sweep.
+
+**Acceptance criteria:**
+
+- A seeker reaching zero ammo does not end the round while another active
+  seeker still has at least one shot.
+- After the final available shot is fully resolved, the server ends SEEK
+  immediately if every active seeker is at zero ammo and any hider survives.
+- If that final shot eliminates the last living hider, seekers win normally;
+  the ammo-exhaustion rule must not overwrite the sweep result.
+- The early finish uses the same authoritative score snapshot, survivor bonus,
+  results transition, and reveal flow as a normal seek timeout.
+- Seeker disconnects and other roster changes re-evaluate the remaining active
+  seekers without allowing clients to decide the outcome locally.
+- Headless rule tests cover one seeker, multiple seekers, a final-shot miss, a
+  final-shot elimination, and a final-shot seeker sweep.
+
+### MOVE-02: Slow hiders to one-fifth speed during seeking
+
+**Problem:** After receiving the full hiding and painting head start, hiders can
+still run at normal speed during SEEK and dodge seekers instead of relying on
+their chosen camouflage and hiding position.
+
+**Requested behavior:** When PAINT ends and SEEK begins, reduce each living
+hider's intentional movement speed to 20% of its paint-phase value. Seekers keep
+their normal speed. The initial version should use a fixed `0.2` multiplier;
+it can become a validated host setting later through `SETTINGS-01` if playtests
+show that tuning is useful.
+
+**Acceptance criteria:**
+
+- Hiders retain normal movement throughout PAINT, including when the host uses
+  `HIDE-01` to start seeking early.
+- On entry to SEEK, living hiders' normal and crouched horizontal movement are
+  exactly one-fifth of their corresponding paint-phase speeds.
+- Seekers' movement speed is unchanged, and eliminated/spectator movement does
+  not accidentally inherit the hider penalty.
+- The multiplier cannot be bypassed by toggling crouch, ragdoll/stand state, or
+  another existing movement mode; wall-climb and jump behavior receive an
+  explicit playtest decision rather than silently restoring full-speed travel.
+- The correct speed is restored on replay and whenever a player is initialized
+  outside the SEEK hider state.
+- Multiplayer movement remains server-consistent, and automated tests cover
+  the PAINT-to-SEEK transition, early seek start, role differences, and replay
+  reset.
 
 ## P1 — Paint through the complete character
 
@@ -345,8 +495,8 @@ see where everyone was hiding.
 
 - Freeze surviving hiders in their final pose. Do not force them to stand up,
   rebuild their body, teleport, or reset their paint when entering results.
-- Let seekers retain normal walking, camera, and look controls for the duration
-  of the inspection period.
+- Let seekers retain normal walking, camera, and look controls while the
+  untimed results inspection remains open.
 - Disable seeker shooting, tags, ammo use, scoring, eliminations, painting, and
   any other action that could change the completed result.
 - Visually highlight every surviving hider after a brief reveal beat. Start with
@@ -355,8 +505,8 @@ see where everyone was hiding.
 - Keep the scoreboard available without forcing it to cover the whole screen;
   seekers should be able to inspect the scene and deliberately open or close the
   detailed results.
-- At the end of inspection, continue to the normal lobby/replay flow. Only then
-  may round-only bodies and poses be reset.
+- Continue to the normal lobby/replay flow only after an explicit player action
+  under `ROUND-03`. Only then may round-only bodies and poses be reset.
 
 **Acceptance criteria:**
 
@@ -379,8 +529,9 @@ see where everyone was hiding.
 
 **Design decisions:**
 
-- Make the inspection duration configurable with the results duration in
-  `SETTINGS-01`; retain the current results duration as the initial default.
+- Do not time-limit the overall inspection or ready-up state. A short reveal
+  beat may have its own presentation delay, but it must not close RESULTS or
+  pressure players to ready up.
 - Prefer an effect visible to everyone so hiders can enjoy the reveal too, while
   keeping seeker movement privileges separate.
 - Consider a short one- or two-second pause before highlighting survivors, so
@@ -705,7 +856,7 @@ together.
 
 ### Bundle A: Session and replay foundation
 
-**Features:** `ROUND-01`, `ROLE-01`, `SCORE-02`
+**Features:** `ROUND-01`, `ROUND-03`, `ROLE-01`, `SCORE-02`
 
 These all need state that survives one round but ends when the lobby session
 ends: stable player identity, previous roles, readiness for another round, and
@@ -718,14 +869,16 @@ the current random selection and leaves a clean hook for `ROLE-01`.
 
 ### Bundle B: Rules and host configuration
 
-**Features:** `SETTINGS-01`, `HIDE-01`, `SCORE-01`, configurable parts of
-`MOVE-01`, `AVATAR-01`, and `MODE-01`
+**Features:** `SETTINGS-01`, `HIDE-01`, `ROUND-02`, `MOVE-02`, `SCORE-01`,
+configurable parts of `MOVE-01`, `AVATAR-01`, and `MODE-01`
 
 Use one validated, replicated settings schema with per-mode sections. The
 lobby can initially expose just hiding time, seeking time, ammo, and seeker
 count; later features can add their values without creating separate settings
 systems. Rules should receive an immutable snapshot at round start so a host
-cannot accidentally change an active round.
+cannot accidentally change an active round. Keep ammo exhaustion authoritative
+and evaluate it only after a shot has resolved; use a fixed hider slowdown first
+and expose it here only if playtesting shows a setting is worthwhile.
 
 ### Bundle C: Hider state and cameras
 
@@ -739,12 +892,14 @@ the ready count or win conditions.
 
 ### Bundle D: Character physics and spatial assumptions
 
-**Features:** `MOVE-01`, `AVATAR-01`, `BUG-01`
+**Features:** `MOVE-01`, `MOVE-02`, `MOVE-03`, `AVATAR-01`, `BUG-01`
 
 Test these in the same movement/physics pass. Character scale changes wall
 clearance, step height, camera origin, aim direction, and spawn orientation,
 while climbing changes which geometry is reachable. Each supported map needs a
 small spawn-and-movement smoke test at the minimum and maximum allowed scale.
+The seek-phase hider multiplier must apply after these base movement values are
+chosen so character or map-scale experiments cannot accidentally cancel it.
 
 Try uniform map enlargement before player-body scaling. It preserves player
 physics but changes traversal distances, jump/climb reach relative to scenery,
@@ -780,8 +935,8 @@ finished.
 
 ### Bundle G: Results and round transition
 
-**Features:** `REVEAL-01`, `ROUND-01`, `SCORE-01`, `SCORE-02`, and the results
-UI portion of `UI-02`
+**Features:** `REVEAL-01`, `ROUND-01`, `ROUND-03`, `SCORE-01`, `SCORE-02`, and
+the results UI portion of `UI-02`
 
 Define one authoritative end-of-round snapshot containing final poses, round
 scores, survivors, and winner before enabling reveal visuals or inspection
@@ -789,6 +944,8 @@ movement. That snapshot feeds the scoreboard and remains unchanged throughout
 the inspection period. Quick replay then resets scene state while preserving
 only the session totals and role history. `REVEAL-01` can ship earlier: pose
 preservation and seeker inspection do not require cumulative scoring or replay.
+The results snapshot and scene stay alive without a countdown until an explicit
+replay or exit action.
 
 ### Bundle H: Reusable avatar system
 
@@ -854,7 +1011,9 @@ Wall-assisted movement makes climbable walls normal traversal, so seeker pens
 and level boundaries must use ceilings, overhangs, or other geometry where
 escape matters. Climbing requires wall contact but deliberately has no height or
 duration limit. Paint Tag ghosts should not gain extra wall traversal beyond the
-normal player movement rules.
+normal player movement rules. `MOVE-03` adds a second line of defense for the
+Hallwyl Museum: explicit playable bounds and recovery around the near-ground
+exterior, not only the global under-map plane.
 
 ### Replay ownership and readiness
 

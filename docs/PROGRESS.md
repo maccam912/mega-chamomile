@@ -3,7 +3,23 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
-## Status: quick replay + session scoring shipped (session 5, 2026-07-12)
+## Status: hidden readiness + early seeking shipped (session 6, 2026-07-12)
+
+### Session 6: paint-phase readiness (`HIDE-01`)
+- **Hiders can report ready** from the PAINT HUD or with `H`, and can undo that
+  confirmation until SEEK begins. Everyone sees `ready / total`; personalized
+  RPCs reveal only the aggregate count and the receiving player's own state.
+- **Host-controlled early seeking** unlocks only when every active hider is
+  ready. The host clicks Start Seeking Now or presses `Enter`; readiness never
+  advances the phase automatically, and the ordinary countdown remains intact.
+- `MatchState` validates phase, role, readiness, undo, and the explicit early
+  transition. Disconnects immediately reduce the required hider count and can
+  unlock the host action when all remaining hiders are ready.
+- Verified: 134 headless checks pass; Godot editor-load check is clean; a
+  two-instance ENet match completed without readiness RPC errors; deterministic
+  1280x720 render review confirmed the PAINT controls and status do not overlap.
+
+## Previous status: quick replay + session scoring shipped (session 5, 2026-07-12)
 
 ### Session 5: consecutive-round foundation (`ROUND-01`, `SCORE-02`)
 - **Quick replay from results** (`ROUND-01`): every player gets a reversible

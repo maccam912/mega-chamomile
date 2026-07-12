@@ -27,6 +27,8 @@ var _snd_phase: AudioStream
 var _snd_win: AudioStream
 var _snd_lose: AudioStream
 var _replay_loading := false
+var _my_hidden := false
+var _all_hiders_hidden := false
 
 
 func _ready() -> void:
@@ -45,6 +47,8 @@ func _ready() -> void:
 	hud.ragdoll_toggled.connect(_toggle_local_ragdoll)
 	hud.replay_ready_toggled.connect(Net.request_replay_ready)
 	hud.replay_start_requested.connect(_on_replay_start_requested)
+	hud.hidden_toggled.connect(Net.request_hidden_ready)
+	hud.start_seeking_requested.connect(Net.request_start_seeking)
 	pause_menu = preload("res://scripts/pause_menu.gd").new()
 	add_child(pause_menu)
 	pause_menu.opened.connect(_set_ui_blocked.bind(true))
@@ -64,6 +68,7 @@ func _ready() -> void:
 	Net.scores_updated.connect(_on_scores_updated)
 	Net.player_despawned.connect(_on_player_despawned)
 	Net.replay_readiness_changed.connect(_on_replay_readiness_changed)
+	Net.hiding_readiness_changed.connect(_on_hiding_readiness_changed)
 
 	if Net.is_server():
 		match_state = MatchState.new()
@@ -73,6 +78,8 @@ func _ready() -> void:
 		Net.all_peers_match_ready.connect(_server_begin_match)
 		Net.shot_requested.connect(_server_handle_shot)
 		Net.player_left.connect(_server_on_player_left)
+		Net.hidden_ready_requested.connect(_server_set_hidden)
+		Net.start_seeking_requested.connect(_server_start_seeking)
 	Net.notify_scene_ready()
 
 
@@ -118,6 +125,7 @@ func _server_on_phase_entered(phase: int) -> void:
 	match phase:
 		MatchState.Phase.PAINT:
 			duration = match_state.cfg["paint_time"]
+			_server_broadcast_hiding_readiness()
 		MatchState.Phase.SEEK:
 			duration = match_state.cfg["seek_time"]
 			if not match_state.seekers().is_empty():
@@ -141,6 +149,22 @@ func _server_on_player_left(id: int) -> void:
 	if match_state != null:
 		match_state.remove_player(id)
 		Net.broadcast_despawn(id)
+		if match_state.phase == MatchState.Phase.PAINT:
+			_server_broadcast_hiding_readiness()
+
+
+func _server_set_hidden(id: int, hidden: bool) -> void:
+	if match_state != null and match_state.set_hidden(id, hidden):
+		_server_broadcast_hiding_readiness()
+
+
+func _server_start_seeking() -> void:
+	if match_state != null:
+		match_state.start_seek_early()
+
+
+func _server_broadcast_hiding_readiness() -> void:
+	Net.broadcast_hiding_readiness(match_state.hidden_hiders(), match_state.hiders().size())
 
 
 func _physics_process(delta: float) -> void:
@@ -222,7 +246,7 @@ func _on_match_setup(payload: Dictionary) -> void:
 		_spawn_player(info)
 	print("[game] match setup: %d players, my_role=%s" % [
 			payload["players"].size(), MatchState.Role.keys()[my_role]])
-	hud.setup(my_role)
+	hud.setup(my_role, Net.is_server())
 	hud.set_alive(total_hiders, total_hiders)
 	# Hiders' nameplates would betray them: seekers never see them.
 	if my_role == MatchState.Role.SEEKER:
@@ -323,10 +347,28 @@ func _on_replay_readiness_changed(ready_ids: Array, player_count: int) -> void:
 	hud.set_replay_readiness(ready_ids, multiplayer.get_unique_id(), player_count)
 
 
+func _on_hiding_readiness_changed(hidden_count: int, hider_count: int, my_hidden: bool) -> void:
+	_my_hidden = my_hidden
+	_all_hiders_hidden = hider_count > 0 and hidden_count == hider_count
+	hud.set_hiding_readiness(hidden_count, hider_count, my_hidden)
+
+
 func _on_replay_start_requested() -> void:
 	# Stop the old results timer before scheduling the same-scene reload. This
 	# prevents its DONE transition from racing the replay into the lobby.
 	_replay_loading = Net.request_replay_start()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if pause_menu == null or pause_menu.visible or current_phase != MatchState.Phase.PAINT:
+		return
+	if my_role == MatchState.Role.HIDER and event.is_action_pressed("toggle_hidden"):
+		Net.request_hidden_ready(not _my_hidden)
+		get_viewport().set_input_as_handled()
+	elif Net.is_server() and _all_hiders_hidden \
+			and event.is_action_pressed("start_seeking_early"):
+		Net.request_start_seeking()
+		get_viewport().set_input_as_handled()
 
 
 func _on_player_despawned(peer_id: int) -> void:

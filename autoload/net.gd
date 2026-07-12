@@ -18,6 +18,9 @@ signal spotted_changed(is_spotted: bool)
 signal scores_updated(scores: Array, winner: int)
 signal player_despawned(peer_id: int)
 signal replay_readiness_changed(ready_ids: Array, player_count: int)
+signal hiding_readiness_changed(hidden_count: int, hider_count: int, my_hidden: bool)
+signal hidden_ready_requested(peer_id: int, hidden: bool)  ## server only
+signal start_seeking_requested  ## server only
 
 const SessionStateScript := preload("res://scripts/session_state.gd")
 
@@ -201,6 +204,43 @@ func _broadcast_replay_readiness() -> void:
 @rpc("authority", "call_local", "reliable")
 func _receive_replay_readiness(ready_ids: Array, player_count: int) -> void:
 	replay_readiness_changed.emit(ready_ids, player_count)
+
+
+## Hiding readiness is personalized: everyone receives only the aggregate
+## count plus their own state, never the identities of ready hiders.
+func broadcast_hiding_readiness(hidden_ids: Array, hider_count: int) -> void:
+	if not is_server():
+		return
+	var hidden_count := hidden_ids.size()
+	for id: int in players:
+		var my_hidden := hidden_ids.has(id)
+		if id == 1:
+			_receive_hiding_readiness(hidden_count, hider_count, my_hidden)
+		else:
+			rpc_id(id, &"_receive_hiding_readiness", hidden_count, hider_count, my_hidden)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_hiding_readiness(hidden_count: int, hider_count: int, my_hidden: bool) -> void:
+	hiding_readiness_changed.emit(hidden_count, hider_count, my_hidden)
+
+
+func request_hidden_ready(hidden: bool) -> void:
+	if is_server():
+		hidden_ready_requested.emit(1, hidden)
+	else:
+		rpc_id(1, &"_request_hidden_ready", hidden)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_hidden_ready(hidden: bool) -> void:
+	if is_server():
+		hidden_ready_requested.emit(multiplayer.get_remote_sender_id(), hidden)
+
+
+func request_start_seeking() -> void:
+	if is_server():
+		start_seeking_requested.emit()
 
 
 @rpc("authority", "call_local", "reliable")
