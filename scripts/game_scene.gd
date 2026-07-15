@@ -302,6 +302,9 @@ func _on_phase_changed(phase: int, duration: float, extra: Dictionary) -> void:
 	if me != null:
 		me.on_phase(phase, extra)
 	if phase == MatchState.Phase.RESULTS:
+		# Player phase cleanup may leave paint mode, which normally captures the
+		# cursor. Results own the mouse now so the replay controls stay clickable.
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		# The score snapshot has already been captured and broadcast. Reveal only
 		# genuine surviving hiders, with no effect on authoritative LoS/scoring.
 		for player in players_node.get_children():

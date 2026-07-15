@@ -35,6 +35,7 @@ func _initialize() -> void:
 	test_paint_stroke()
 	test_articulated_ragdoll()
 	test_results_pose_preservation()
+	test_results_mouse_release()
 	test_ui_foundation()
 	test_hud_passes_mouse_through()
 	test_travel_facing()
@@ -599,6 +600,25 @@ func test_results_pose_preservation() -> void:
 	check(all_frozen, "survivor ragdoll no longer simulates during inspection")
 	check(all_noncolliding, "inspection movement cannot disturb survivor parts")
 	body.free()
+
+
+func test_results_mouse_release() -> void:
+	print("results mouse release:")
+	var player = load("res://scripts/player.gd").new()
+	player.name = "1"
+	get_root().add_child(player)
+	player.role = MatchStateScript.Role.HIDER
+	player.phase = MatchStateScript.Phase.RESULTS
+	player.paint_mode = true
+
+	# Exercise the local part of the production phase handler directly because
+	# SceneTree._initialize runs before this test has a multiplayer interface.
+	player._apply_local_phase({})
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	check(not player.paint_mode, "RESULTS synchronously exits hider paint mode")
+	check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE,
+			"results can unlock the cursor after hider phase cleanup")
+	player.free()
 
 
 func test_ui_foundation() -> void:

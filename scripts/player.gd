@@ -172,23 +172,32 @@ func _add_gun() -> void:
 func on_phase(new_phase: int, extra: Dictionary) -> void:
 	phase = new_phase
 	if is_local():
-		match phase:
-			MatchState.Phase.PAINT:
-				frozen = role == MatchState.Role.SEEKER
-			MatchState.Phase.SEEK:
-				frozen = false
-				# Do not carry paint-phase sprint momentum into the hunt. Jump and
-				# wall-climb stay vertical-only and retain their authored speeds.
-				velocity = velocity_for_phase_entry(velocity, role, phase, eliminated,
-						Input.is_action_pressed("crouch"))
-				if role == MatchState.Role.SEEKER and extra.has("ammo"):
-					ammo = extra["ammo"]
-			MatchState.Phase.RESULTS:
-				# Surviving hiders keep their exact standing/ragdoll state. Seekers
-				# may walk around the completed scene, but phase gates disable shots.
-				frozen = role == MatchState.Role.HIDER
-				if role == MatchState.Role.HIDER and ragdolled:
-					body.freeze_ragdoll_pose()
+		_apply_local_phase(extra)
+
+
+func _apply_local_phase(extra: Dictionary) -> void:
+	match phase:
+		MatchState.Phase.PAINT:
+			frozen = role == MatchState.Role.SEEKER
+		MatchState.Phase.SEEK:
+			frozen = false
+			# Do not carry paint-phase sprint momentum into the hunt. Jump and
+			# wall-climb stay vertical-only and retain their authored speeds.
+			velocity = velocity_for_phase_entry(velocity, role, phase, eliminated,
+					Input.is_action_pressed("crouch"))
+			if role == MatchState.Role.SEEKER and extra.has("ammo"):
+				ammo = extra["ammo"]
+		MatchState.Phase.RESULTS:
+			# Leave paint mode synchronously. Otherwise an eliminated hider can
+			# clear it on the next frame, after the results UI has made the mouse
+			# visible, and capture the cursor over the replay controls.
+			if paint_mode:
+				set_paint_mode(false)
+			# Surviving hiders keep their exact standing/ragdoll state. Seekers
+			# may walk around the completed scene, but phase gates disable shots.
+			frozen = role == MatchState.Role.HIDER
+			if role == MatchState.Role.HIDER and ragdolled:
+				body.freeze_ragdoll_pose()
 
 
 func set_nameplate_visible(v: bool) -> void:
@@ -227,6 +236,10 @@ func eye_position_global() -> Vector3:
 
 func on_eliminated() -> void:
 	set_ragdoll(false)
+	# Do not defer this transition to _process(): the final elimination can be
+	# followed immediately by the results UI unlocking the cursor.
+	if is_local() and paint_mode:
+		set_paint_mode(false)
 	eliminated = true
 	body.visible = false
 	body.set_parts_collidable(false)
