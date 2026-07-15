@@ -16,7 +16,10 @@ MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
    cooldown + limited ammo). Hiders may still move and keep painting.
    - Seeker shoots a hider → hider eliminated (becomes a spectator).
    - All hiders eliminated → seekers win. Timer expires → surviving hiders win.
-4. **RESULTS (12 s)** — scoreboard, then everyone returns to the lobby.
+4. **REVEAL phase (10 s)** — surviving hiders freeze in their final poses and
+   receive visible markers while everyone sees where they hid.
+5. **RESULTS (untimed)** — scoreboard and replay readiness remain open until
+   the players deliberately start another round or leave.
 
 ## Scoring (the signature mechanic)
 
@@ -116,7 +119,8 @@ docs/DESIGN.md, PROGRESS.md
 | Port | 24565 |
 | Paint phase | 90 s |
 | Seek phase | 180 s |
-| Results | 12 s |
+| After-round reveal | 10 s (host-configurable in lobby) |
+| Results | Untimed |
 | Seekers | 1 (host-configurable in lobby) |
 | Map | Basic Arena (host-configurable in lobby) |
 | Shot cooldown / ammo | 0.8 s / 3× hiders |

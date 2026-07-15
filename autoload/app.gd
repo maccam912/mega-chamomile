@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS := {
 	"seeker_count": 1,
 	"paint_time": 90.0,
 	"seek_time": 180.0,
+	"reveal_time": 10.0,
 	"shot_cooldown": 0.8,
 	"ammo_mode": "per_hider",
 	"ammo_per_hider": 3,
@@ -69,6 +70,7 @@ func _ready() -> void:
 	if cli.has("fast-phases"):
 		settings["paint_time"] = 4.0
 		settings["seek_time"] = 6.0
+		settings["reveal_time"] = 2.0
 	if cli.has("screenshot"):
 		var st := Timer.new()
 		st.wait_time = float(cli.get("screenshot-at", "8"))
@@ -139,6 +141,9 @@ func apply_match_settings(source: Dictionary) -> void:
 	next["seeker_count"] = clampi(int(source.get("seeker_count", 1)), 1, 8)
 	next["paint_time"] = clampf(float(source.get("paint_time", 90.0)), min_phase_time, 300.0)
 	next["seek_time"] = clampf(float(source.get("seek_time", 180.0)), min_phase_time, 600.0)
+	var min_reveal_time := 0.5 if bool(source.get("_fast_phases", false)) else 1.0
+	next["reveal_time"] = clampf(float(source.get("reveal_time", 10.0)),
+			min_reveal_time, 60.0)
 	next["shot_cooldown"] = clampf(float(source.get("shot_cooldown", 0.8)), 0.1, 3.0)
 	var ammo_mode := str(source.get("ammo_mode", "per_hider"))
 	next["ammo_mode"] = ammo_mode if ammo_mode in ["per_hider", "fixed"] else "per_hider"
@@ -196,6 +201,7 @@ func _setup_input_map() -> void:
 	_add_key("toggle_hidden", KEY_H)
 	_add_key("start_seeking_early", KEY_ENTER)
 	_add_key("toggle_results", KEY_TAB)
+	_add_key("cycle_seeker_camera", KEY_V)
 	_add_mouse("primary_action", MOUSE_BUTTON_LEFT)   # paint (hider) / shoot (seeker)
 	_add_mouse("eyedrop", MOUSE_BUTTON_RIGHT)
 	_add_mouse("brush_grow", MOUSE_BUTTON_WHEEL_UP)

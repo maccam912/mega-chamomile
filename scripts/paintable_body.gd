@@ -198,6 +198,17 @@ func freeze_ragdoll_pose() -> void:
 		rb.collision_mask = 0
 
 
+## Resume a locally simulated ragdoll after a temporary read-only camera view.
+## Unlike set_ragdoll(), this preserves every articulated part transform.
+func resume_ragdoll_pose() -> void:
+	if not ragdolled:
+		return
+	for rb in part_bodies:
+		rb.collision_mask = 1
+		rb.freeze = false
+		rb.sleeping = false
+
+
 func capture_pose() -> Array[Transform3D]:
 	var pose: Array[Transform3D] = []
 	for rb in part_bodies:

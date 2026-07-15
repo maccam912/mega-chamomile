@@ -9,12 +9,14 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
   lying pose. Ragdoll enables a fly camera; entering paint mode returns to a
   center-of-mass orbit around the body. Running and turning momentum carries
   into every released body segment. Bonus points for staying inside a seeker's
-  line of sight without being noticed.
+  line of sight without being noticed. During SEEK, leave paint mode and press
+  V to follow/cycle seekers without moving your hiding body.
 - Pick a **Human, Cat, or Dog** in the lobby. The choice is replicated, and all
   three bodies support the same painting, movement, shooting, and ragdoll loop.
 - **Seekers** wait blindfolded during the paint phase, then hunt with limited
   ammo before the timer runs out. The round ends early once every seeker's
-  final shot has resolved.
+  final shot has resolved. A configurable 10-second reveal then marks surviving
+  hiding spots before the untimed results/ready-up screen.
 - Nearby hosted games appear automatically on the main menu; manual IP joining
   remains available. Players can state a role preference, and replay role
   assignment rotates fairly across the lobby session.

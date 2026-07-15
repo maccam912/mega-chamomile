@@ -8,13 +8,14 @@ extends RefCounted
 signal phase_entered(phase: int)
 signal player_eliminated(victim_id: int, shooter_id: int)
 
-enum Phase { LOBBY, PAINT, SEEK, RESULTS }
+enum Phase { LOBBY, PAINT, SEEK, REVEAL, RESULTS }
 enum Role { NONE, HIDER, SEEKER }
 enum Team { NOBODY, HIDERS, SEEKERS }
 
 var cfg := {
 	"paint_time": 90.0,
 	"seek_time": 180.0,
+	"reveal_time": 10.0,
 	"shot_cooldown": 0.8,
 	"ammo_mode": "per_hider",
 	"ammo_per_hider": 3,
@@ -99,7 +100,7 @@ func start() -> void:
 
 func tick(delta: float) -> void:
 	match phase:
-		Phase.PAINT, Phase.SEEK:
+		Phase.PAINT, Phase.SEEK, Phase.REVEAL:
 			pass
 		_:
 			return
@@ -264,6 +265,8 @@ func _enter_phase(new_phase: int) -> void:
 					else int(cfg["ammo_per_hider"]) * maxi(1, hiders().size()))
 			for id: int in seekers():
 				players[id]["ammo"] = ammo
+		Phase.REVEAL:
+			time_left = cfg["reveal_time"]
 		Phase.RESULTS:
 			# Results are an untimed inspection/readiness state. Only an explicit
 			# replay or exit action leaves this phase.
@@ -280,6 +283,8 @@ func _advance() -> void:
 		Phase.SEEK:
 			# Timer ran out with hiders still standing: hiders win.
 			_finish(Team.HIDERS if not alive_hiders().is_empty() else Team.SEEKERS)
+		Phase.REVEAL:
+			_enter_phase(Phase.RESULTS)
 
 
 func _finish(winning_team: int) -> void:
@@ -290,7 +295,7 @@ func _finish(winning_team: int) -> void:
 	elif winning_team == Team.SEEKERS:
 		for id: int in seekers():
 			players[id]["bonus"] += cfg["sweep_bonus"]
-	_enter_phase(Phase.RESULTS)
+	_enter_phase(Phase.REVEAL)
 
 
 ## Ends the round early when one side no longer exists (all hiders eliminated,

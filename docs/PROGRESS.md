@@ -3,6 +3,22 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
+## Status: seeker follow camera and timed round reveal shipped (session 12, 2026-07-15)
+
+### Session 12: hider camera and after-round reveal (`CAMERA-01`, `REVEAL-01`)
+
+- Living hiders can press `V` during SEEK to follow/cycle active seekers and
+  return to their own camera. The mode requires paint mode to be off, freezes
+  the hiding body and painting controls, preserves ragdoll poses, and shows the
+  selected seeker in the HUD without modifying seeker authority.
+- Completed rounds now enter a host-configurable `REVEAL` phase (10 seconds by
+  default) before the untimed results screen. Scores are captured first,
+  surviving hiders retain their exact standing/ragdoll poses, survivor markers
+  identify hiding spots, and seekers can walk through the finished scene.
+- Verified: 224 headless logic/HUD checks pass; follow-camera and standing-pose
+  physics smoke checks pass; all avatar ragdoll smoke checks pass; the Godot
+  editor load is clean.
+
 ## Status: shared UI foundation and main-menu polish implemented (session 11, 2026-07-12)
 
 ### Session 11: interface consistency and presentation (`UI-01`, `UI-02`)

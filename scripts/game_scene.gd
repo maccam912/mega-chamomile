@@ -29,6 +29,9 @@ var _snd_lose: AudioStream
 var _replay_loading := false
 var _my_hidden := false
 var _all_hiders_hidden := false
+var _followed_seeker_id := -1
+var _final_scores: Array = []
+var _final_winner: int = MatchState.Team.NOBODY
 
 
 func _ready() -> void:
@@ -131,9 +134,15 @@ func _server_on_phase_entered(phase: int) -> void:
 			duration = match_state.cfg["seek_time"]
 			if not match_state.seekers().is_empty():
 				extra["ammo"] = match_state.ammo_of(match_state.seekers()[0])
+		MatchState.Phase.REVEAL:
+			duration = match_state.cfg["reveal_time"]
+			extra["winner"] = match_state.winner
+			# Capture scores before the timed reveal so disconnects or inspection
+			# movement cannot change the completed round snapshot.
+			_final_scores = Net.record_round_scores(match_state.scores_snapshot())
+			_final_winner = match_state.winner
 		MatchState.Phase.RESULTS:
-			var scores := Net.record_round_scores(match_state.scores_snapshot())
-			Net.broadcast_scores(scores, match_state.winner)
+			Net.broadcast_scores(_final_scores, _final_winner)
 			Net.begin_replay_readiness()
 	Net.broadcast_phase(phase, duration, extra)
 
@@ -295,21 +304,28 @@ func _on_fall_recovery_body_entered(fallen: Node3D) -> void:
 func _on_phase_changed(phase: int, duration: float, extra: Dictionary) -> void:
 	print("[game] phase -> %s (%.0fs)" % [MatchState.Phase.keys()[phase], duration])
 	current_phase = phase
-	map.set_seek_open(phase == MatchState.Phase.SEEK or phase == MatchState.Phase.RESULTS)
+	map.set_seek_open(phase == MatchState.Phase.SEEK or phase == MatchState.Phase.REVEAL \
+			or phase == MatchState.Phase.RESULTS)
 	hud.on_phase(phase, duration, my_role, extra)
 	_play2d(_snd_phase)
 	var me := _player(multiplayer.get_unique_id())
 	if me != null:
 		me.on_phase(phase, extra)
+	if phase != MatchState.Phase.SEEK:
+		_followed_seeker_id = -1
+		hud.set_follow_camera("")
+	if phase == MatchState.Phase.REVEAL:
+		for player in players_node.get_children():
+			player.set_survivor_reveal(
+					player.role == MatchState.Role.HIDER and not player.eliminated)
+		var winner: int = int(extra.get("winner", MatchState.Team.NOBODY))
+		var reveal_text := "HIDERS SURVIVED — FIND THEIR HIDING SPOTS" \
+				if winner == MatchState.Team.HIDERS else "ROUND OVER — HIDING SPOTS REVEALED"
+		hud.show_banner(reveal_text, Color("fff06a"))
 	if phase == MatchState.Phase.RESULTS:
 		# Player phase cleanup may leave paint mode, which normally captures the
 		# cursor. Results own the mouse now so the replay controls stay clickable.
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		# The score snapshot has already been captured and broadcast. Reveal only
-		# genuine surviving hiders, with no effect on authoritative LoS/scoring.
-		for player in players_node.get_children():
-			player.set_survivor_reveal(
-					player.role == MatchState.Role.HIDER and not player.eliminated)
 	if phase == MatchState.Phase.SEEK and my_role == MatchState.Role.HIDER:
 		hud.show_banner("seekers released!", Color("ff8a5c"))
 
@@ -325,6 +341,7 @@ func _on_player_eliminated(victim_id: int, shooter_id: int) -> void:
 			alive += 1
 	hud.set_alive(alive, total_hiders)
 	if victim_id == multiplayer.get_unique_id():
+		_stop_following_seeker()
 		hud.show_banner("ELIMINATED", Color("ff5a4d"))
 		hud.set_spotted(false)
 
@@ -375,6 +392,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.toggle_results_inspection()
 		get_viewport().set_input_as_handled()
 		return
+	if my_role == MatchState.Role.HIDER and current_phase == MatchState.Phase.SEEK \
+			and event.is_action_pressed("cycle_seeker_camera"):
+		_cycle_seeker_camera()
+		get_viewport().set_input_as_handled()
+		return
 	if current_phase != MatchState.Phase.PAINT:
 		return
 	if my_role == MatchState.Role.HIDER and event.is_action_pressed("toggle_hidden"):
@@ -388,6 +410,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_player_despawned(peer_id: int) -> void:
 	var p := _player(peer_id)
+	if peer_id == _followed_seeker_id:
+		_stop_following_seeker()
 	if p != null:
 		p.queue_free()
 
@@ -414,6 +438,48 @@ func _toggle_local_ragdoll() -> void:
 	var me := _player(multiplayer.get_unique_id())
 	if me != null:
 		me.toggle_ragdoll()
+
+
+func _cycle_seeker_camera() -> void:
+	var me := _player(multiplayer.get_unique_id())
+	if me == null or me.eliminated:
+		return
+	if me.paint_mode:
+		hud.show_banner("EXIT PAINT MODE FIRST", Color("e0b34d"))
+		return
+	var seekers: Array = []
+	for player in players_node.get_children():
+		if player.role == MatchState.Role.SEEKER and not player.eliminated:
+			seekers.append(player)
+	seekers.sort_custom(func(a, b) -> bool: return a.peer_id < b.peer_id)
+	if seekers.is_empty():
+		_stop_following_seeker()
+		hud.show_banner("NO SEEKER TO FOLLOW", Color("e0b34d"))
+		return
+	var next_index := 0
+	if _followed_seeker_id > 0:
+		var current_index := -1
+		for i in seekers.size():
+			if seekers[i].peer_id == _followed_seeker_id:
+				current_index = i
+				break
+		next_index = current_index + 1
+		if current_index < 0 or next_index >= seekers.size():
+			_stop_following_seeker()
+			return
+	var target = seekers[next_index]
+	if me.set_follow_target(target):
+		_followed_seeker_id = target.peer_id
+		hud.set_follow_camera(target.display_name, next_index + 1, seekers.size())
+
+
+func _stop_following_seeker() -> void:
+	var me := _player(multiplayer.get_unique_id())
+	if me != null:
+		me.clear_follow_target()
+	_followed_seeker_id = -1
+	if hud != null:
+		hud.set_follow_camera("")
 
 
 # --- helpers -------------------------------------------------------------------

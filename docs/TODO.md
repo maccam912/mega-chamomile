@@ -533,6 +533,11 @@ then reveal them with a visible outline, pulse, or blink. During this results
 inspection period, seekers can continue walking and looking around the map to
 see where everyone was hiding.
 
+**Resolution:** Round completion now enters a dedicated, server-authoritative
+`REVEAL` phase before the untimed results screen. It defaults to 10 seconds,
+is configurable by the host, freezes surviving hiders in their exact pose, and
+adds high-contrast survivor markers while seekers inspect the completed scene.
+
 **Round-end behavior:**
 
 - Freeze surviving hiders in their final pose. Do not force them to stand up,
@@ -620,11 +625,17 @@ imported maps alike.
 - Prefer a fixed, tested scale per map. Make scale host-configurable through
   `SETTINGS-01` only if multiple scale values prove safe and fun.
 
-### CAMERA-01: Let a living hider watch the seeker
+### CAMERA-01: Let a living hider watch the seeker — **SHIPPED**
 
 **Requested behavior:** During the seek phase, a hider who is still in play can
 switch from their own camera to a read-only follow camera on a seeker, then
 switch back to their body. With multiple seekers, they can cycle among them.
+
+**Resolution:** Living hiders can press `V` during SEEK, after leaving paint
+mode, to follow and cycle through active seekers before returning to their own
+camera. Following freezes local movement and painting (including an articulated
+ragdoll pose), never touches the seeker's authority, and shows the current
+seeker plus cycle position in the HUD.
 
 **Acceptance criteria:**
 

@@ -93,6 +93,7 @@ func _build_ui() -> void:
 		_seeker_spin = _add_setting_spin(box, "Seekers:", "seeker_count", 1, 8, 1)
 		_add_setting_spin(box, "Hiding time:", "paint_time", 15, 300, 5, "s")
 		_add_setting_spin(box, "Seeking time:", "seek_time", 30, 600, 15, "s")
+		_add_setting_spin(box, "After-round reveal:", "reveal_time", 1, 60, 1, "s")
 		_add_setting_spin(box, "Shot cooldown:", "shot_cooldown", 0.1, 3.0, 0.1, "s")
 
 		var ammo_mode_row := HBoxContainer.new()
@@ -326,10 +327,11 @@ func _refresh_settings_summary(snapshot: Dictionary) -> void:
 			if cfg.get("ammo_mode", "per_hider") == "fixed"
 			else "%d per hider" % int(cfg.get("ammo_per_hider", 3)))
 	_settings_summary.text = (
-			"MATCH SETTINGS  •  %ds hide  •  %ds seek  •  %d seeker(s)\n"
+			"MATCH SETTINGS  •  %ds hide  •  %ds seek  •  %ds reveal  •  %d seeker(s)\n"
 			+ "%s  •  %.1fs cooldown  •  %s\n"
 			+ "Scoring: %.1f survival/s, %.1f visible/s, %d find, %d survivor, %d sweep") % [
 			int(cfg.get("paint_time", 90)), int(cfg.get("seek_time", 180)),
+			int(cfg.get("reveal_time", 10)),
 			int(cfg.get("seeker_count", 1)),
 			str(App.MAPS.get(str(cfg.get("map_id", App.DEFAULT_MAP_ID)),
 					App.MAPS[App.DEFAULT_MAP_ID])["label"]),

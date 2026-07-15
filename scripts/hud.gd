@@ -30,6 +30,7 @@ var _bottom_hider: HBoxContainer
 var _hint_label: Label
 var _cross: ColorRect
 var _paint_mode_label: Label
+var _follow_label: Label
 var _brush_ring: Control
 var _ragdoll_button: Button
 var _replay_ready_button: CheckButton
@@ -112,6 +113,12 @@ func _ready() -> void:
 	_paint_mode_label.add_theme_color_override("font_color", Color("8fd18a"))
 	_paint_mode_label.visible = false
 	top.add_child(_paint_mode_label)
+	_follow_label = Label.new()
+	_follow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_follow_label.add_theme_font_size_override("font_size", 18)
+	_follow_label.add_theme_color_override("font_color", Color("72d7ff"))
+	_follow_label.visible = false
+	top.add_child(_follow_label)
 	_hidden_status = Label.new()
 	_hidden_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hidden_status.add_theme_font_size_override("font_size", 16)
@@ -288,7 +295,7 @@ func setup(role: int, is_host := false) -> void:
 	else:
 		_role_label.text = "HIDER"
 		_role_label.add_theme_color_override("font_color", Color("8fd18a"))
-		_hint_label.text = "F paint, R ragdoll, H hidden, Space wall-climb.\nHold U to unstuck, Esc menu."
+		_hint_label.text = "F paint, R ragdoll, H hidden, V follow seeker.\nSpace wall-climb, hold U unstuck, Esc menu."
 	_ragdoll_button.visible = role == MatchState.Role.HIDER
 	_hidden_toggle.visible = _is_hider
 	_start_seek_button.visible = _is_host
@@ -300,7 +307,8 @@ func set_ragdoll(active: bool) -> void:
 
 func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void:
 	_time_left = duration
-	_counting = phase == MatchState.Phase.PAINT or phase == MatchState.Phase.SEEK
+	_counting = phase == MatchState.Phase.PAINT or phase == MatchState.Phase.SEEK \
+			or phase == MatchState.Phase.REVEAL
 	_timer_label.text = "" if not _counting else _timer_label.text
 	_blindfold_timer.text = "" if not _counting else _blindfold_timer.text
 	# The server broadcasts the RESULTS scores before the phase change, so the
@@ -312,21 +320,49 @@ func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void
 			_phase_label.text = "PAINT PHASE — blend in"
 			_blindfold.visible = role == MatchState.Role.SEEKER
 			_bottom_hider.visible = role == MatchState.Role.HIDER
+			_ammo_label.visible = false
+			_ragdoll_button.visible = role == MatchState.Role.HIDER
 			_hidden_status.visible = true
 			_hidden_controls.visible = _is_hider or _is_host
 		MatchState.Phase.SEEK:
 			_phase_label.text = "SEEK PHASE — they're coming"
 			_blindfold.visible = false
+			_bottom_hider.visible = role == MatchState.Role.HIDER
+			_ragdoll_button.visible = role == MatchState.Role.HIDER
 			_hidden_status.visible = false
 			_hidden_controls.visible = false
 			if role == MatchState.Role.SEEKER and extra.has("ammo"):
 				set_ammo(int(extra["ammo"]))
+		MatchState.Phase.REVEAL:
+			_phase_label.text = "AFTER-ROUND REVEAL — see where they hid"
+			_blindfold.visible = false
+			_spotted_label.visible = false
+			_bottom_hider.visible = false
+			_ammo_label.visible = false
+			_ragdoll_button.visible = false
+			_hidden_status.visible = false
+			_hidden_controls.visible = false
+			_follow_label.visible = false
 		MatchState.Phase.RESULTS:
 			_phase_label.text = "RESULTS"
 			_blindfold.visible = false
 			_spotted_label.visible = false
+			_bottom_hider.visible = false
+			_ammo_label.visible = false
+			_ragdoll_button.visible = false
 			_hidden_status.visible = false
 			_hidden_controls.visible = false
+			_follow_label.visible = false
+
+
+func set_follow_camera(seeker_name: String, index := 0, total := 0) -> void:
+	if seeker_name.is_empty():
+		_follow_label.visible = false
+		_follow_label.text = ""
+		return
+	_follow_label.text = "FOLLOWING %s  (%d / %d)  •  V next / return" % [
+			seeker_name, index, total]
+	_follow_label.visible = true
 
 
 func set_hiding_readiness(hidden_count: int, hider_count: int, my_hidden: bool) -> void:

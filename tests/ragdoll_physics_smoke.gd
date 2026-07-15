@@ -82,13 +82,53 @@ func _run() -> void:
 	var follow_restored: bool = is_equal_approx(player._spring.spring_length,
 			player.ORBIT_SPRING_LENGTH) and player._rig.position.is_equal_approx(
 			player.NORMAL_CAMERA_PIVOT)
+
+	var seeker: CharacterBody3D = load("res://scenes/player.tscn").instantiate()
+	seeker.name = "2"
+	seeker.display_name = "Camera Target"
+	seeker.role = MatchState.Role.SEEKER
+	seeker.phase = MatchState.Phase.SEEK
+	seeker.position = Vector3(5, 0, 0)
+	seeker.look_dir = Vector3.LEFT
+	world.add_child(seeker)
+	await physics_frame
+	player.phase = MatchState.Phase.SEEK
+	player.frozen = false
+	var hidden_position := player.position
+	var seeker_follow_started: bool = player.set_follow_target(seeker)
+	Input.action_press("move_forward")
+	for i in 5:
+		await physics_frame
+	Input.action_release("move_forward")
+	var seeker_follow_tracked: bool = player._rig.global_position.distance_to(
+			seeker.eye_position_global()) < 0.02
+	var seeker_follow_read_only: bool = player.position.distance_to(hidden_position) < 0.01 \
+			and not player._can_paint() and not player._can_ragdoll()
+	player.clear_follow_target()
+	var seeker_follow_returned: bool = not player.is_following_seeker() and not player.frozen \
+			and not player._rig.top_level \
+			and is_equal_approx(player._spring.spring_length, player.ORBIT_SPRING_LENGTH)
+	player.phase = MatchState.Phase.REVEAL
+	player.frozen = true
+	player.velocity = Vector3(2, 3, -1)
+	var reveal_position := player.position
+	for i in 5:
+		await physics_frame
+	var reveal_standing_frozen: bool = player.position.is_equal_approx(reveal_position) \
+			and player.velocity == Vector3.ZERO
 	print("ragdoll torso y=%.3f, up-dot=%.3f" % [torso_y, torso_up_dot])
 	print("momentum inherited=%s, continued forward=%s (%.2fm)" % [momentum_inherited,
 			continued_forward, mass_center_travel.dot(travel_direction)])
 	print("camera initial=%s, orbit=%s, fly=%s, transition=%s, moved=%s, restored=%s" % [
 			initial_fly_continuous, orbit_centered and orbit_enabled, fly_enabled,
 			orbit_to_fly_continuous, fly_moved, follow_restored])
+	print("seeker follow started=%s, tracked=%s, read_only=%s, returned=%s" % [
+			seeker_follow_started, seeker_follow_tracked, seeker_follow_read_only,
+			seeker_follow_returned])
+	print("reveal standing pose frozen=%s" % reveal_standing_frozen)
 	quit(0 if laid_down and tilted and momentum_inherited and continued_forward \
 			and initial_fly_continuous and orbit_centered \
 			and orbit_enabled and fly_enabled and orbit_to_fly_continuous and fly_moved \
-			and follow_restored else 1)
+			and follow_restored and seeker_follow_started and seeker_follow_tracked \
+			and seeker_follow_read_only and seeker_follow_returned \
+			and reveal_standing_frozen else 1)

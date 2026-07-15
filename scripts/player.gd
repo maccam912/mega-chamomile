@@ -53,6 +53,10 @@ var _camera_pivot := NORMAL_CAMERA_PIVOT
 var _orbit_length := ORBIT_SPRING_LENGTH
 var _avatar_scale := 1.0
 var _camera_local_offset := CAMERA_LOCAL_OFFSET
+var _follow_target: Node
+var _follow_home_transform := Transform3D.IDENTITY
+var _follow_home_spring_length := ORBIT_SPRING_LENGTH
+var _follow_froze_ragdoll := false
 
 var _sync_timer := 0.0
 var _stroke_active := false  ## LMB held and last sample hit our body
@@ -176,6 +180,8 @@ func on_phase(new_phase: int, extra: Dictionary) -> void:
 
 
 func _apply_local_phase(extra: Dictionary) -> void:
+	if is_following_seeker():
+		clear_follow_target()
 	match phase:
 		MatchState.Phase.PAINT:
 			frozen = role == MatchState.Role.SEEKER
@@ -187,15 +193,17 @@ func _apply_local_phase(extra: Dictionary) -> void:
 					Input.is_action_pressed("crouch"))
 			if role == MatchState.Role.SEEKER and extra.has("ammo"):
 				ammo = extra["ammo"]
-		MatchState.Phase.RESULTS:
+		MatchState.Phase.REVEAL, MatchState.Phase.RESULTS:
 			# Leave paint mode synchronously. Otherwise an eliminated hider can
 			# clear it on the next frame, after the results UI has made the mouse
 			# visible, and capture the cursor over the replay controls.
 			if paint_mode:
 				set_paint_mode(false)
 			# Surviving hiders keep their exact standing/ragdoll state. Seekers
-			# may walk around the completed scene, but phase gates disable shots.
+			# may walk around the reveal, but phase gates disable shots.
 			frozen = role == MatchState.Role.HIDER
+			if frozen:
+				velocity = Vector3.ZERO
 			if role == MatchState.Role.HIDER and ragdolled:
 				body.freeze_ragdoll_pose()
 
@@ -235,6 +243,8 @@ func eye_position_global() -> Vector3:
 
 
 func on_eliminated() -> void:
+	if is_following_seeker():
+		clear_follow_target()
 	set_ragdoll(false)
 	# Do not defer this transition to _process(): the final elimination can be
 	# followed immediately by the results UI unlocking the cursor.
@@ -256,7 +266,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		# Free look while captured; in paint mode, orbit only while MMB is held
 		# so the cursor can travel to the body without the camera chasing it.
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not is_following_seeker():
 			_orbit(event.relative)
 		elif paint_mode and Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
 			_orbit(event.relative)
@@ -283,6 +293,8 @@ func _orbit(relative: Vector2) -> void:
 
 
 func set_paint_mode(on: bool) -> void:
+	if on and is_following_seeker():
+		return
 	if paint_mode == on:
 		return
 	paint_mode = on
@@ -358,6 +370,11 @@ func _process(delta: float) -> void:
 		_reveal_marker.modulate.a = pulse
 	if not is_local():
 		return
+	if is_following_seeker():
+		if is_instance_valid(_follow_target):
+			_update_follow_camera()
+		else:
+			clear_follow_target()
 	shot_cooldown_left = maxf(0.0, shot_cooldown_left - delta)
 	_paint_sound_timer = maxf(0.0, _paint_sound_timer - delta)
 	if paint_mode and not _can_paint():
@@ -378,6 +395,9 @@ func _process(delta: float) -> void:
 
 
 func _local_move(delta: float) -> void:
+	if is_following_seeker():
+		velocity = Vector3.ZERO
+		return
 	if eliminated:
 		if not ui_blocked:
 			_fly_move(delta)
@@ -386,6 +406,12 @@ func _local_move(delta: float) -> void:
 		velocity = Vector3.ZERO
 		if not paint_mode and not ui_blocked:
 			_ragdoll_fly_camera(delta)
+		return
+	if frozen and role == MatchState.Role.HIDER \
+			and (phase == MatchState.Phase.REVEAL or phase == MatchState.Phase.RESULTS):
+		# Round-end inspection preserves an upright hider's exact location too;
+		# ordinary frozen states still apply gravity below (notably seekers in PAINT).
+		velocity = Vector3.ZERO
 		return
 	if frozen or ui_blocked:
 		# No input, but keep gravity so opening the menu mid-jump can't hover.
@@ -483,6 +509,7 @@ static func vertical_velocity_for_movement(current: float, on_floor: bool,
 func _update_unstuck(delta: float) -> bool:
 	_unstuck_cooldown = maxf(0.0, _unstuck_cooldown - delta)
 	var allowed := not eliminated and not frozen and not ui_blocked \
+			and not is_following_seeker() \
 			and _unstuck_cooldown <= 0.0
 	if not allowed or not Input.is_action_pressed("unstuck"):
 		_unstuck_hold = 0.0
@@ -547,7 +574,7 @@ func _play_footstep() -> void:
 
 func _can_paint() -> bool:
 	return (
-		role == MatchState.Role.HIDER and not eliminated
+		role == MatchState.Role.HIDER and not eliminated and not is_following_seeker()
 		and (phase == MatchState.Phase.PAINT or phase == MatchState.Phase.SEEK)
 	)
 
@@ -562,6 +589,7 @@ func _can_shoot() -> bool:
 
 func _can_ragdoll() -> bool:
 	return role == MatchState.Role.HIDER and not eliminated and not frozen \
+			and not is_following_seeker() \
 			and (phase == MatchState.Phase.PAINT or phase == MatchState.Phase.SEEK)
 
 
@@ -617,6 +645,72 @@ func _enter_ragdoll_orbit_camera() -> void:
 func _restore_follow_camera() -> void:
 	_spring.spring_length = _orbit_length
 	_rig.position = _camera_pivot
+
+
+static func follow_camera_allowed(player_role: int, current_phase: int,
+		is_eliminated: bool, in_paint_mode: bool) -> bool:
+	return player_role == MatchState.Role.HIDER and current_phase == MatchState.Phase.SEEK \
+			and not is_eliminated and not in_paint_mode
+
+
+func is_following_seeker() -> bool:
+	return _follow_target != null
+
+
+## Attach only this local camera to a seeker. The target player is never
+## modified, so their authority, input, movement, and camera remain untouched.
+func set_follow_target(target: Node) -> bool:
+	if not is_local() or not follow_camera_allowed(role, phase, eliminated, paint_mode):
+		return false
+	if target == null or not is_instance_valid(target) \
+			or int(target.get("role")) != MatchState.Role.SEEKER:
+		return false
+	if is_following_seeker():
+		_follow_target = target
+		var next_avatar := AvatarCatalog.profile(str(target.get("avatar_id")))
+		_spring.spring_length = float(next_avatar["orbit_length"])
+		_update_follow_camera()
+		return true
+	_follow_home_transform = _rig.transform
+	_follow_home_spring_length = _spring.spring_length
+	_follow_froze_ragdoll = ragdolled
+	if _follow_froze_ragdoll:
+		body.freeze_ragdoll_pose()
+	velocity = Vector3.ZERO
+	frozen = true
+	_follow_target = target
+	_rig.top_level = true
+	var target_avatar := AvatarCatalog.profile(str(target.get("avatar_id")))
+	_spring.spring_length = float(target_avatar["orbit_length"])
+	_update_follow_camera()
+	return true
+
+
+func clear_follow_target() -> void:
+	if not is_following_seeker():
+		return
+	_follow_target = null
+	_rig.top_level = false
+	_rig.transform = _follow_home_transform
+	_spring.spring_length = _follow_home_spring_length
+	if _follow_froze_ragdoll and ragdolled and phase == MatchState.Phase.SEEK \
+			and not eliminated:
+		body.resume_ragdoll_pose()
+	_follow_froze_ragdoll = false
+	frozen = role == MatchState.Role.HIDER \
+			and (phase == MatchState.Phase.REVEAL or phase == MatchState.Phase.RESULTS)
+
+
+func _update_follow_camera() -> void:
+	if not is_instance_valid(_follow_target):
+		return
+	var pivot: Vector3 = _follow_target.eye_position_global()
+	var direction: Vector3 = _follow_target.get("look_dir")
+	direction = direction.normalized()
+	if direction.length_squared() < 0.01:
+		direction = Vector3.FORWARD
+	_rig.global_position = pivot
+	_rig.look_at(pivot + direction, Vector3.UP)
 
 
 ## Sample the brush under a screen point (cursor or crosshair) every frame

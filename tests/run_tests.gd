@@ -40,6 +40,7 @@ func _initialize() -> void:
 	test_hud_passes_mouse_through()
 	test_travel_facing()
 	test_seek_hider_slowdown()
+	test_follow_camera_rules()
 	test_wall_climb()
 	test_unstuck_action()
 	test_fall_recovery()
@@ -65,7 +66,7 @@ func check(cond: bool, label: String) -> void:
 
 func _make(n_players: int, seeker_count: int, cfg := {}) -> MatchState:
 	var ms: MatchState = MatchStateScript.new()
-	var defaults := {"paint_time": 5.0, "seek_time": 10.0}
+	var defaults := {"paint_time": 5.0, "seek_time": 10.0, "reveal_time": 1.0}
 	defaults.merge(cfg, true)
 	ms.configure(defaults)
 	for i in n_players:
@@ -101,7 +102,7 @@ func test_full_match_hiders_survive() -> void:
 	check(_tick_until(ms, MatchState.Phase.SEEK), "PAINT rolls into SEEK")
 	var ammo_expected: int = ms.cfg["ammo_per_hider"] * 3
 	check(ms.ammo_of(ms.seekers()[0]) == ammo_expected, "seeker ammo = 3x hiders")
-	check(_tick_until(ms, MatchState.Phase.RESULTS), "SEEK times out into RESULTS")
+	check(_tick_until(ms, MatchState.Phase.REVEAL), "SEEK times out into REVEAL")
 	check(ms.winner == MatchState.Team.HIDERS, "hiders win on timeout")
 	var hider_id: int = ms.hiders()[0]
 	var score: int = 0
@@ -110,6 +111,9 @@ func test_full_match_hiders_survive() -> void:
 			score = row["score"]
 	# ~10s survival @1/s + 75 survive bonus = ~85
 	check(score >= 84 and score <= 86, "hider score = survival + bonus (got %d)" % score)
+	check(ms.time_left > 0.0 and ms.time_left <= 1.0,
+			"REVEAL uses its configured after-round duration")
+	check(_tick_until(ms, MatchState.Phase.RESULTS), "REVEAL advances into RESULTS")
 	var final_scores := ms.scores_snapshot()
 	ms.tick(120.0)
 	check(ms.phase == MatchState.Phase.RESULTS,
@@ -130,7 +134,7 @@ func test_sweep_seekers_win() -> void:
 		ms.tick(1.0)  # let the cooldown clear between shots
 		check(ms.consume_shot(seeker), "shot allowed at hider %d" % v)
 		check(ms.report_hit(seeker, v), "hit eliminates hider %d" % v)
-	check(ms.phase == MatchState.Phase.RESULTS, "round ends when last hider falls")
+	check(ms.phase == MatchState.Phase.REVEAL, "round reveal begins when last hider falls")
 	check(ms.winner == MatchState.Team.SEEKERS, "seekers win the sweep")
 	var seeker_score: int = ms.scores_snapshot()[0]["score"]
 	# 3 kills * 100 + 50 sweep bonus
@@ -164,7 +168,7 @@ func test_ammo_exhaustion_ends_seek() -> void:
 	check(single.phase == MatchState.Phase.SEEK,
 			"consuming final ammo waits for the shot result")
 	single.complete_shot()
-	check(single.phase == MatchState.Phase.RESULTS
+	check(single.phase == MatchState.Phase.REVEAL
 			and single.winner == MatchState.Team.HIDERS,
 			"final-shot miss ends SEEK immediately with a hider win")
 
@@ -178,7 +182,7 @@ func test_ammo_exhaustion_ends_seek() -> void:
 			"one empty seeker does not end while another still has ammo")
 	check(multiple.consume_shot(seekers[1]), "second seeker spends the last team shot")
 	multiple.complete_shot()
-	check(multiple.phase == MatchState.Phase.RESULTS
+	check(multiple.phase == MatchState.Phase.REVEAL
 			and multiple.winner == MatchState.Team.HIDERS,
 			"all seekers empty ends the round")
 
@@ -190,7 +194,7 @@ func test_ammo_exhaustion_ends_seek() -> void:
 	last_hit.consume_shot(seeker)
 	check(last_hit.report_hit(seeker, final_hider), "final shot can eliminate its target")
 	last_hit.complete_shot()
-	check(last_hit.phase == MatchState.Phase.RESULTS
+	check(last_hit.phase == MatchState.Phase.REVEAL
 			and last_hit.winner == MatchState.Team.SEEKERS,
 			"final-shot sweep is not overwritten by ammo exhaustion")
 
@@ -204,7 +208,7 @@ func test_ammo_exhaustion_ends_seek() -> void:
 	check(roster.phase == MatchState.Phase.SEEK,
 			"empty seeker waits while a roster teammate has ammo")
 	roster.remove_player(seekers[1])
-	check(roster.phase == MatchState.Phase.RESULTS
+	check(roster.phase == MatchState.Phase.REVEAL
 			and roster.winner == MatchState.Team.HIDERS,
 			"seeker disconnect re-evaluates remaining team ammo")
 
@@ -217,14 +221,19 @@ func test_match_settings() -> void:
 	check(fixed.ammo_of(fixed.seekers()[0]) == 7,
 			"fixed-ammo mode ignores the hider count")
 	var app := AppScript.new()
+	app.apply_match_settings({})
+	check(app.settings["reveal_time"] == 10.0,
+			"after-round reveal defaults to ten seconds")
 	app.apply_match_settings({
 		"map_id": "not-a-map", "paint_time": -5, "seek_time": 9999,
+		"reveal_time": 999,
 		"shot_cooldown": 0, "ammo_mode": "invalid", "ammo_per_seeker": 999,
 		"survival_pps": 99, "kill_points": -1,
 	})
 	check(app.settings["map_id"] == app.DEFAULT_MAP_ID,
 			"invalid replicated map falls back safely")
-	check(app.settings["paint_time"] == 15.0 and app.settings["seek_time"] == 600.0,
+	check(app.settings["paint_time"] == 15.0 and app.settings["seek_time"] == 600.0
+			and app.settings["reveal_time"] == 60.0,
 			"phase durations clamp to safe limits")
 	check(app.settings["shot_cooldown"] == 0.1
 			and app.settings["ammo_per_seeker"] == 50,
@@ -233,8 +242,10 @@ func test_match_settings() -> void:
 			and app.settings["survival_pps"] == 10.0
 			and app.settings["kill_points"] == 0,
 			"unknown modes and scoring values are normalized")
-	app.apply_match_settings({"paint_time": 4.0, "seek_time": 6.0, "_fast_phases": true})
-	check(app.settings["paint_time"] == 4.0 and app.settings["seek_time"] == 6.0,
+	app.apply_match_settings({"paint_time": 4.0, "seek_time": 6.0,
+			"reveal_time": 0.25, "_fast_phases": true})
+	check(app.settings["paint_time"] == 4.0 and app.settings["seek_time"] == 6.0
+			and app.settings["reveal_time"] == 0.5,
 			"explicit test-mode snapshots preserve fast phase durations")
 	app.reset_match_settings()
 	check(app.settings == app.DEFAULT_SETTINGS, "restore defaults resets every match rule")
@@ -398,7 +409,7 @@ func test_disconnect_wins() -> void:
 	_tick_until(ms, MatchState.Phase.SEEK)
 	var seeker: int = ms.seekers()[0]
 	ms.remove_player(seeker)
-	check(ms.phase == MatchState.Phase.RESULTS and ms.winner == MatchState.Team.HIDERS,
+	check(ms.phase == MatchState.Phase.REVEAL and ms.winner == MatchState.Team.HIDERS,
 			"all seekers leaving hands hiders the win")
 
 	var ms2 := _make(3, 1)
@@ -406,7 +417,7 @@ func test_disconnect_wins() -> void:
 	_tick_until(ms2, MatchState.Phase.SEEK)
 	for h: int in ms2.hiders():
 		ms2.remove_player(h)
-	check(ms2.phase == MatchState.Phase.RESULTS and ms2.winner == MatchState.Team.SEEKERS,
+	check(ms2.phase == MatchState.Phase.REVEAL and ms2.winner == MatchState.Team.SEEKERS,
 			"all hiders leaving hands seekers the win")
 
 
@@ -599,6 +610,11 @@ func test_results_pose_preservation() -> void:
 		all_noncolliding = all_noncolliding and part.collision_mask == 0
 	check(all_frozen, "survivor ragdoll no longer simulates during inspection")
 	check(all_noncolliding, "inspection movement cannot disturb survivor parts")
+	body.resume_ragdoll_pose()
+	var all_resumed := true
+	for part: RigidBody3D in body.part_bodies:
+		all_resumed = all_resumed and not part.freeze and part.collision_mask == 1
+	check(all_resumed, "temporary follow-camera freeze can resume the same ragdoll pose")
 	body.free()
 
 
@@ -693,6 +709,17 @@ func test_hud_passes_mouse_through() -> void:
 	hud.toggle_results_inspection()
 	check(hud._results.visible,
 			"inspection toggle restores the scoreboard and cursor")
+	hud.on_phase(MatchStateScript.Phase.REVEAL, 10.0, MatchStateScript.Role.HIDER, {})
+	check(hud._counting and hud._phase_label.text.begins_with("AFTER-ROUND REVEAL"),
+			"timed reveal is distinct from the untimed results screen")
+	check(not hud._bottom_hider.visible and not hud._ammo_label.visible \
+			and not hud._ragdoll_button.visible,
+			"reveal clears active-round controls so hiding spots stay visible")
+	hud.set_follow_camera("Seeker Two", 2, 3)
+	check(hud._follow_label.visible and "2 / 3" in hud._follow_label.text,
+			"follow-camera HUD identifies the seeker and cycle position")
+	hud.set_follow_camera("")
+	check(not hud._follow_label.visible, "returning to the hider hides the follow status")
 	hud.on_phase(MatchStateScript.Phase.PAINT, 5.0, MatchStateScript.Role.HIDER, {})
 	check(not hud._results.visible, "next round's PAINT phase clears the scoreboard")
 	hud.setup(MatchStateScript.Role.HIDER, true)
@@ -705,7 +732,8 @@ func test_hud_passes_mouse_through() -> void:
 	var app := AppScript.new()
 	app._setup_input_map()
 	check(InputMap.has_action("toggle_hidden") and InputMap.has_action("start_seeking_early")
-			and InputMap.has_action("toggle_results"),
+			and InputMap.has_action("toggle_results")
+			and InputMap.has_action("cycle_seeker_camera"),
 			"readiness keyboard actions are registered")
 	app.free()
 	hud.free()
@@ -769,6 +797,24 @@ func test_seek_hider_slowdown() -> void:
 			player_script.SPEED * 0.2), "SEEK entry clamps carried paint-phase momentum")
 	check(is_equal_approx(entry_velocity.y, 1.0),
 			"SEEK entry does not change vertical momentum")
+
+
+func test_follow_camera_rules() -> void:
+	print("living-hider follow camera rules:")
+	var player_script := load("res://scripts/player.gd")
+	var hider := MatchStateScript.Role.HIDER
+	var seeker := MatchStateScript.Role.SEEKER
+	var seek := MatchStateScript.Phase.SEEK
+	check(player_script.follow_camera_allowed(hider, seek, false, false),
+			"living hider outside paint mode can follow during SEEK")
+	check(not player_script.follow_camera_allowed(hider, MatchStateScript.Phase.PAINT,
+			false, false), "follow view cannot expose the seeker during PAINT")
+	check(not player_script.follow_camera_allowed(hider, seek, false, true),
+			"paint mode must be exited before following")
+	check(not player_script.follow_camera_allowed(hider, seek, true, false),
+			"eliminated hiders keep their separate spectator behavior")
+	check(not player_script.follow_camera_allowed(seeker, seek, false, false),
+			"seekers cannot enter the hider-only follow mode")
 
 
 func test_wall_climb() -> void:
