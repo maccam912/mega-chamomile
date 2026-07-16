@@ -13,6 +13,7 @@ const UNSTUCK_HOLD_SECONDS := 1.25
 const UNSTUCK_COOLDOWN_SECONDS := 10.0
 const MOUSE_SENS := 0.0025
 const SYNC_INTERVAL := 0.05
+const FOLLOW_ROTATION_SMOOTHING := 12.0
 const PAINT_MIN_STEP := 0.35  ## of brush radius: cursor travel before restamping
 const PAINT_MAX_GAP := 0.35   ## m: bigger jumps between samples aren't connected
 const PAINT_RANGE := 4.0
@@ -372,7 +373,7 @@ func _process(delta: float) -> void:
 		return
 	if is_following_seeker():
 		if is_instance_valid(_follow_target):
-			_update_follow_camera()
+			_update_follow_camera(delta)
 		else:
 			clear_follow_target()
 	shot_cooldown_left = maxf(0.0, shot_cooldown_left - delta)
@@ -669,7 +670,7 @@ func set_follow_target(target: Node) -> bool:
 		_follow_target = target
 		var next_avatar := AvatarCatalog.profile(str(target.get("avatar_id")))
 		_spring.spring_length = float(next_avatar["orbit_length"])
-		_update_follow_camera()
+		_update_follow_camera(0.0, true)
 		return true
 	_follow_home_transform = _rig.transform
 	_follow_home_spring_length = _spring.spring_length
@@ -682,7 +683,7 @@ func set_follow_target(target: Node) -> bool:
 	_rig.top_level = true
 	var target_avatar := AvatarCatalog.profile(str(target.get("avatar_id")))
 	_spring.spring_length = float(target_avatar["orbit_length"])
-	_update_follow_camera()
+	_update_follow_camera(0.0, true)
 	return true
 
 
@@ -701,7 +702,7 @@ func clear_follow_target() -> void:
 			and (phase == MatchState.Phase.REVEAL or phase == MatchState.Phase.RESULTS)
 
 
-func _update_follow_camera() -> void:
+func _update_follow_camera(delta: float, snap := false) -> void:
 	if not is_instance_valid(_follow_target):
 		return
 	var pivot: Vector3 = _follow_target.eye_position_global()
@@ -710,7 +711,15 @@ func _update_follow_camera() -> void:
 	if direction.length_squared() < 0.01:
 		direction = Vector3.FORWARD
 	_rig.global_position = pivot
-	_rig.look_at(pivot + direction, Vector3.UP)
+	var target_basis := Basis.looking_at(direction, Vector3.UP)
+	if snap:
+		_rig.global_basis = target_basis
+		return
+	# Remote look direction arrives at the network sync rate. Spherical
+	# interpolation hides those discrete rotation steps without making the
+	# result dependent on the viewer's frame rate.
+	var blend := 1.0 - exp(-FOLLOW_ROTATION_SMOOTHING * maxf(delta, 0.0))
+	_rig.global_basis = _rig.global_basis.slerp(target_basis, blend).orthonormalized()
 
 
 ## Sample the brush under a screen point (cursor or crosshair) every frame
