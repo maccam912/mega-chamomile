@@ -38,6 +38,7 @@ var _replay_ready_button: CheckButton
 var _replay_start_button: Button
 var _replay_status: Label
 var _is_replay_host := false
+var _replay_start_pending := false
 var _hidden_status: Label
 var _hidden_controls: HBoxContainer
 var _hidden_toggle: CheckButton
@@ -461,6 +462,7 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 		c.queue_free()
 	_results.visible = true
 	_is_replay_host = is_host
+	_replay_start_pending = false
 
 	var dark := ColorRect.new()
 	dark.color = Color(0.05, 0.05, 0.08, 0.85)
@@ -524,7 +526,9 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 	_replay_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_replay_status.add_theme_font_size_override("font_size", 14)
 	_replay_status.add_theme_color_override("font_color", Color("e0b34d"))
-	_replay_status.text = "Confirm when you're ready to play again."
+	_replay_status.text = (
+			"Ready-ups are optional — start whenever you want."
+			if is_host else "Confirm when you're ready to play again.")
 	box.add_child(_replay_status)
 
 	if is_host:
@@ -532,10 +536,11 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 		_replay_start_button.text = "START NEXT ROUND"
 		_replay_start_button.theme_type_variation = "PrimaryButton"
 		_replay_start_button.custom_minimum_size = Vector2(0, 48)
-		_replay_start_button.disabled = true
+		_replay_start_button.disabled = false
 		_replay_start_button.set_meta("interactive_hud", true)
 		_replay_start_button.pressed.connect(func() -> void:
 			App.play_ui_click()
+			_replay_start_pending = true
 			_replay_start_button.disabled = true
 			_replay_status.text = "Starting next round..."
 			replay_start_requested.emit())
@@ -578,11 +583,17 @@ func set_replay_readiness(ready_ids: Array, my_id: int, player_count: int) -> vo
 			"Everyone is ready — start when you are." if _is_replay_host
 			else "Everyone is ready — waiting for the host.")
 	elif me_ready:
-		_replay_status.text = "You're ready — waiting for others (%d / %d)." % [ready_count, player_count]
+		_replay_status.text = (
+				"You're ready (%d / %d) — start whenever you want." % [ready_count, player_count]
+				if _is_replay_host
+				else "You're ready — waiting for the host (%d / %d)." % [ready_count, player_count])
 	else:
-		_replay_status.text = "%d / %d ready. Confirm when you're ready." % [ready_count, player_count]
+		_replay_status.text = (
+				"%d / %d ready — you can start now." % [ready_count, player_count]
+				if _is_replay_host
+				else "%d / %d ready. Confirm when you're ready." % [ready_count, player_count])
 	if is_instance_valid(_replay_start_button):
-		_replay_start_button.disabled = not everyone_ready
+		_replay_start_button.disabled = _replay_start_pending
 
 
 ## One line per player explaining where the total came from.

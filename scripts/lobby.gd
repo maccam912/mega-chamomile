@@ -21,6 +21,7 @@ func _ready() -> void:
 	_build_ui()
 	Net.players_changed.connect(_refresh)
 	Net.settings_changed.connect(_refresh_settings_summary)
+	Net.waiting_for_round_changed.connect(_on_waiting_for_round_changed)
 	_refresh()
 
 
@@ -169,7 +170,7 @@ func _build_ui() -> void:
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.add_theme_font_size_override("font_size", 14)
 	_hint.add_theme_color_override("font_color", Color("e0b34d"))
-	_hint.text = "" if Net.is_server() else "waiting for the host to start..."
+	_hint.text = _waiting_hint()
 	box.add_child(_hint)
 
 	var leave_btn := Button.new()
@@ -350,13 +351,15 @@ func _refresh() -> void:
 		var row := Label.new()
 		var tag := "  (host)" if id == 1 else ""
 		var me := "  <- you" if id == multiplayer.get_unique_id() else ""
+		var waiting := bool(Net.players[id].get("waiting", false))
+		var activity := "  (joins next round)" if waiting else ""
 		var avatar_id := AvatarCatalog.normalize(str(
 				Net.players[id].get("avatar", AvatarCatalog.DEFAULT_ID)))
 		var preference := str(Net.players[id].get("preference", "none"))
 		var preference_label: String = {"none": "no preference", "seeker": "prefers seeker",
 				"hider": "prefers hider"}.get(preference, "no preference")
-		row.text = "%s  —  %s, %s%s%s" % [Net.players[id]["name"],
-				AvatarCatalog.label(avatar_id), preference_label, tag, me]
+		row.text = "%s  —  %s, %s%s%s%s" % [Net.players[id]["name"],
+				AvatarCatalog.label(avatar_id), preference_label, tag, activity, me]
 		row.add_theme_color_override("font_color", Color("d8dce6"))
 		_player_list.add_child(row)
 		if id == multiplayer.get_unique_id() and _avatar_option != null:
@@ -381,6 +384,21 @@ func _refresh() -> void:
 				Net.update_lobby_settings()
 		_hint.text = "solo test mode: you'll hide with no seekers" if n == 1 else ""
 		_maybe_autostart(n)
+	else:
+		_hint.text = _waiting_hint()
+
+
+func _on_waiting_for_round_changed(_waiting: bool) -> void:
+	if _hint != null:
+		_hint.text = _waiting_hint()
+
+
+func _waiting_hint() -> String:
+	if Net.is_server():
+		return ""
+	if Net.waiting_for_next_round:
+		return "Round in progress — you're in for the next round."
+	return "Waiting for the host to start..."
 
 
 func _maybe_autostart(player_count: int) -> void:

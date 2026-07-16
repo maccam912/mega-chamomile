@@ -19,7 +19,8 @@ MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
 4. **REVEAL phase (10 s)** — surviving hiders freeze in their final poses and
    receive visible markers while everyone sees where they hid.
 5. **RESULTS (untimed)** — scoreboard and replay readiness remain open until
-   the players deliberately start another round or leave.
+   the host deliberately starts another round or players leave. Ready-ups are
+   advisory; the host never has to wait for every connected player.
 
 ## Scoring (the signature mechanic)
 
@@ -62,7 +63,9 @@ MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
   - Strokes replicate as compact RPCs containing body-local endpoints, color,
     radius, and the through-body ray axis. Each peer transforms the axis into
     every articulated part's local space, including rotated ragdoll pieces.
-    Late joiners are out of scope for MVP (lobby locks at match start).
+    A round uses a frozen active-player roster. Late joiners remain connected
+    on a waiting screen and are promoted only when the host starts the next
+    round, so they never appear halfway through a live simulation.
 - **Eyedropper**: read the rendered frame's center pixel
   (`viewport.get_texture().get_image().get_pixel(...)`) — samples anything on
   screen regardless of material. On-demand only (click), so the readback cost
@@ -76,6 +79,9 @@ MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
   Join by IP:port (LAN / port-forward for now; lobby service is future work).
 - `Net.gd` autoload: host/join, `players: {peer_id: {name, role, ...}}`
   registry replicated via reliable RPCs, connection/disconnection signals.
+- The server snapshots `round_player_ids` when loading a round. Scene barriers,
+  role assignment, spawning, and disconnect effects use that snapshot; newly
+  registered peers are marked waiting until the following snapshot.
 - `game.tscn` uses a **MultiplayerSpawner** (players spawn as `str(peer_id)`,
   input authority = that peer) and **MultiplayerSynchronizer** for transforms.
 - **Server-authoritative rules**: phase machine, timers, role assignment,
@@ -148,7 +154,8 @@ docs/DESIGN.md, PROGRESS.md
 
 - Two selectable maps: the generated `map_basic` blockout and an intentionally
   blank, editor-authored `map_empty` scaffold for manual level building.
-- No late-join mid-match, no host migration, no dedicated server build.
+- No host migration or dedicated server build. Late joiners wait for the next
+  round rather than entering the current simulation.
 - Vertex-paint resolution is chunky (by design, blocky aesthetic) — texture
   painting is the quality upgrade later.
 - Ragdoll provides a natural lying pose; authored poses/emotes are still future work.

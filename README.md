@@ -18,8 +18,12 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
   final shot has resolved. A configurable 10-second reveal then marks surviving
   hiding spots before the untimed results/ready-up screen.
 - Nearby hosted games appear automatically on the main menu; manual IP joining
-  remains available. Players can state a role preference, and replay role
-  assignment rotates fairly across the lobby session.
+  remains available, including games already in progress. Mid-round arrivals
+  wait safely and enter when the host starts the next round; departures never
+  hold up a round or ready-up barrier. Replay readiness is informational, so
+  the host can start whenever the group is ready enough. Players can state a
+  role preference, and replay role assignment rotates fairly across the lobby
+  session.
 - Replays maintain separate opponent-adjusted hiding and seeking ratings. The
   next round resizes hiders within safe limits so struggling hiders get smaller
   bodies and strong seekers face smaller targets.
@@ -60,6 +64,7 @@ godot --headless -s tests/run_tests.gd
 
 - `docs/DESIGN.md` — mechanics, scoring, architecture decisions
 - `docs/PROGRESS.md` — current build state, pick-up-here notes
+- `docs/IROH_FEASIBILITY.md` — researched NAT-traversal transport migration
 
 ## Credits
 

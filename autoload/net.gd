@@ -19,6 +19,7 @@ signal scores_updated(scores: Array, winner: int)
 signal player_despawned(peer_id: int)
 signal replay_readiness_changed(ready_ids: Array, player_count: int)
 signal hiding_readiness_changed(hidden_count: int, hider_count: int, my_hidden: bool)
+signal waiting_for_round_changed(waiting: bool)
 signal hidden_ready_requested(peer_id: int, hidden: bool)  ## server only
 signal start_seeking_requested  ## server only
 signal settings_changed(settings: Dictionary)
@@ -33,6 +34,10 @@ const DISCOVERY_STALE_SECONDS := 3.5
 
 var players := {}  ## peer_id -> {"name": String, "avatar": String, "preference": String}
 var my_name := "Painter"
+## Frozen at the instant a round load begins. Players who connect afterward
+## remain in `players` but do not participate until the next round load.
+var round_player_ids: Array[int] = []
+var waiting_for_next_round := false
 
 var _ready_peers := {}
 var _match_ready_peers := {}
@@ -66,7 +71,9 @@ func host_game() -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	players = {1: {"name": my_name, "avatar": App.selected_avatar,
-			"preference": App.selected_role_preference}}
+			"preference": App.selected_role_preference, "waiting": false}}
+	round_player_ids.clear()
+	waiting_for_next_round = false
 	lobby_settings = App.settings.duplicate(true)
 	session.reset([])
 	session.add_player(1, App.lobby_identity)
@@ -85,6 +92,8 @@ func join_game(ip: String) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	lobby_settings.clear()
+	round_player_ids.clear()
+	waiting_for_next_round = false
 	session.reset([])
 	_accepting_replay_ready = false
 	App.last_scores.clear()
@@ -99,6 +108,8 @@ func leave() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	players.clear()
 	lobby_settings.clear()
+	round_player_ids.clear()
+	waiting_for_next_round = false
 	_ready_peers.clear()
 	_match_ready_peers.clear()
 	session.reset([])
@@ -128,7 +139,7 @@ func _stop_lan_advertising() -> void:
 
 
 func _poll_lan_advertising() -> void:
-	if _lan_server == null or App.in_match:
+	if _lan_server == null:
 		return
 	_lan_server.poll()
 	while _lan_server.is_connection_available():
@@ -144,6 +155,7 @@ func _poll_lan_advertising() -> void:
 			"players": players.size(),
 			"capacity": 16,
 			"port": App.PORT,
+			"in_progress": App.in_match,
 		}
 		peer.put_packet(JSON.stringify(payload).to_utf8_buffer())
 
@@ -213,20 +225,22 @@ func _poll_lan_discovery(delta: float) -> void:
 
 func _on_peer_connected(id: int) -> void:
 	if is_server() and App.in_match:
-		# No late joins mid-match in the MVP.
-		multiplayer.multiplayer_peer.disconnect_peer(id)
+		print("[net] peer %d connected during a round; queueing for the next one" % id)
 
 
 func _on_peer_disconnected(id: int) -> void:
 	if not is_server():
 		return
+	var was_in_round := round_player_ids.has(id)
+	round_player_ids.erase(id)
 	players.erase(id)
 	session.remove_player(id)
 	_ready_peers.erase(id)
 	_match_ready_peers.erase(id)
 	rpc(&"_sync_players", players)
 	players_changed.emit()
-	player_left.emit(id)
+	if was_in_round:
+		player_left.emit(id)
 	if _accepting_replay_ready:
 		_broadcast_replay_readiness()
 	_check_barriers()
@@ -256,21 +270,32 @@ func _register_player(pname: String, avatar_id: String, preference: String,
 	if not is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
+	var waiting := App.in_match
 	players[id] = {
 		"name": pname.substr(0, 20),
 		"avatar": AvatarCatalog.normalize(avatar_id),
 		"preference": _normalize_preference(preference),
+		"waiting": waiting,
 	}
 	rpc_id(id, &"_sync_settings", App.settings)
+	rpc_id(id, &"_receive_waiting_for_round", waiting)
 	session.add_player(id, lobby_identity.substr(0, 80))
 	rpc(&"_sync_players", players)
 	players_changed.emit()
+	if _accepting_replay_ready:
+		_broadcast_replay_readiness()
 
 
 @rpc("authority", "call_remote", "reliable")
 func _sync_players(new_players: Dictionary) -> void:
 	players = new_players
 	players_changed.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_waiting_for_round(waiting: bool) -> void:
+	waiting_for_next_round = waiting
+	waiting_for_round_changed.emit(waiting)
 
 
 ## Lobby customization is server-authoritative and becomes part of the match
@@ -291,7 +316,7 @@ func _request_avatar(avatar_id: String) -> void:
 
 
 func _set_player_avatar(id: int, avatar_id: String) -> void:
-	if App.in_match or not players.has(id):
+	if not players.has(id) or (App.in_match and round_player_ids.has(id)):
 		return
 	players[id]["avatar"] = AvatarCatalog.normalize(avatar_id)
 	rpc(&"_sync_players", players)
@@ -314,7 +339,7 @@ func _request_role_preference(preference: String) -> void:
 
 
 func _set_role_preference(id: int, preference: String) -> void:
-	if App.in_match or not players.has(id):
+	if not players.has(id) or (App.in_match and round_player_ids.has(id)):
 		return
 	players[id]["preference"] = _normalize_preference(preference)
 	rpc(&"_sync_players", players)
@@ -327,7 +352,9 @@ func _normalize_preference(preference: String) -> String:
 
 func assign_session_roles(seeker_count: int) -> Array:
 	var preferences := {}
-	for id: int in players:
+	for id: int in round_player_ids:
+		if not players.has(id):
+			continue
 		preferences[id] = _normalize_preference(str(players[id].get("preference", "none")))
 	return session.assign_roles(preferences, seeker_count)
 
@@ -356,8 +383,9 @@ func request_start() -> void:
 		_begin_game_load()
 
 
-## Every player opts in from the results screen. Once all connected players
-## are ready, the host may reload the game scene for the next round.
+## Readiness is an informational signal during the between-round break. The
+## host may start the next round at any time; every connected player at that
+## instant is promoted into the frozen round roster.
 func begin_replay_readiness() -> void:
 	if not is_server():
 		return
@@ -389,14 +417,18 @@ func _set_replay_ready(id: int, ready: bool) -> void:
 func request_replay_start() -> bool:
 	if not is_server() or not _accepting_replay_ready:
 		return false
-	if session.all_replay_ready(players.keys()):
-		_begin_game_load()
-		return true
-	return false
+	_begin_game_load()
+	return true
 
 
 func _begin_game_load() -> void:
-	_stop_lan_advertising()
+	round_player_ids.clear()
+	for id: int in players:
+		round_player_ids.append(id)
+		players[id]["waiting"] = false
+	round_player_ids.sort()
+	rpc(&"_sync_players", players)
+	players_changed.emit()
 	var snapshot: Dictionary = App.settings.duplicate(true)
 	var fast_phases := App.cli.has("fast-phases")
 	if fast_phases:
@@ -408,7 +440,13 @@ func _begin_game_load() -> void:
 	_accepting_replay_ready = false
 	_ready_peers.clear()
 	_match_ready_peers.clear()
-	rpc(&"_load_game", snapshot)
+	# Target only the frozen roster. A peer connected but not yet registered is
+	# intentionally left on the waiting screen until the following break.
+	for id: int in round_player_ids:
+		if id == 1:
+			_load_game(snapshot)
+		else:
+			rpc_id(id, &"_load_game", snapshot)
 
 
 func _broadcast_replay_readiness() -> void:
@@ -426,7 +464,7 @@ func broadcast_hiding_readiness(hidden_ids: Array, hider_count: int) -> void:
 	if not is_server():
 		return
 	var hidden_count := hidden_ids.size()
-	for id: int in players:
+	for id: int in round_player_ids:
 		var my_hidden := hidden_ids.has(id)
 		if id == 1:
 			_receive_hiding_readiness(hidden_count, hider_count, my_hidden)
@@ -460,6 +498,8 @@ func request_start_seeking() -> void:
 @rpc("authority", "call_local", "reliable")
 func _load_game(settings_snapshot: Dictionary) -> void:
 	App.apply_match_settings(settings_snapshot)
+	waiting_for_next_round = false
+	waiting_for_round_changed.emit(false)
 	App.in_match = true
 	App.status_message = ""
 	App.goto_scene(App.GAME_SCENE)
@@ -480,6 +520,8 @@ func _peer_scene_ready() -> void:
 
 
 func _mark_scene_ready(id: int) -> void:
+	if not round_player_ids.has(id):
+		return
 	_ready_peers[id] = true
 	_check_barriers()
 
@@ -498,6 +540,8 @@ func _peer_match_ready() -> void:
 
 
 func _mark_match_ready(id: int) -> void:
+	if not round_player_ids.has(id):
+		return
 	_match_ready_peers[id] = true
 	_check_barriers()
 
@@ -514,7 +558,7 @@ func _check_barriers() -> void:
 
 
 func _all_present(marks: Dictionary) -> bool:
-	for id: int in players:
+	for id: int in round_player_ids:
 		if not marks.has(id):
 			return false
 	return true

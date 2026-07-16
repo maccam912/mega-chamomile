@@ -17,7 +17,9 @@ requests. It is planning documentation; items are unimplemented unless marked
   disconnects.
 - `NET-01` **SHIPPED**: available LAN hosts advertise over UDP and appear in a
   live, deduplicated join list with compatibility and player-count details;
-  manual IP remains available.
+  manual IP remains available. In-progress hosts stay discoverable, late
+  arrivals wait for the next round, and active-roster snapshots keep them out
+  of current scene barriers.
 - `REVEAL-01` **SHIPPED**: survivor poses and paint remain intact in RESULTS,
   frozen ragdolls cannot be pushed, high-contrast markers reveal survivors,
   and Tab switches between the scoreboard and read-only scene inspection.
@@ -36,8 +38,9 @@ requests. It is planning documentation; items are unimplemented unless marked
   everyone sees an aggregate count, and the host can release seekers early
   once every active hider is ready.
 - `ROUND-01` **SHIPPED**: every player can ready up from results; once all
-  connected players opt in, the host can immediately reload the game scene for
-  another round without breaking up the lobby.
+  connected players have signaled, the group can see that status, but the host
+  may immediately reload the game scene at any readiness count without breaking
+  up the lobby.
 - `ROUND-03` **SHIPPED**: results remain open without a countdown until the host
   deliberately starts the next round or a player leaves.
 - `MOVE-02` **SHIPPED**: living hiders move at 20% horizontal speed during SEEK;
@@ -89,7 +92,7 @@ after investigation, especially for bugs.
 | `ROLE-01` | **SHIPPED** | High | `ROUND-01`, `SCORE-02` | Preferences, persistent history, fairness, replication, and rule tests are implemented. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
-| `NET-02` | M feasibility spike / XL migration | Low | `NET-01`, networking architecture | Iroh may enable identity-based connections, NAT traversal, and relay fallback, but replacing Godot ENet requires an integration prototype first. |
+| `NET-02` | S integration spike / M hardening | Medium | `NET-01`, networking architecture | The existing Godot Iroh addon already implements `MultiplayerPeerExtension`, transfer modes, peer IDs, and host relay behavior. Paint-n-Seek still needs version pinning/updating, unreliable ragdoll packet-size validation, a small target-peer audit, and cross-platform packaging. See `IROH_FEASIBILITY.md`. |
 | `MODE-01` | XL | High | Build after reusable round/settings state | Requires a second authoritative game loop, ghost state, tag handoffs, UI, scoring, and edge-case tests. |
 | `AVATAR-02` | **SHIPPED** | Medium | Avatar contract + physics/play tests | Human, Cat, and Dog share one catalog-driven painting/ragdoll pipeline with replicated lobby selection. |
 

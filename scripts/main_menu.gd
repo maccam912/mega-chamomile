@@ -350,9 +350,11 @@ func _on_lan_games_changed(games: Array) -> void:
 		var button := Button.new()
 		button.theme_type_variation = "QuietButton"
 		var compatible := bool(game.get("compatible", false))
-		button.text = "%s  •  %d/%d PLAYERS%s" % [
+		var progress := "  •  NEXT ROUND" if bool(game.get("in_progress", false)) else ""
+		button.text = "%s  •  %d/%d PLAYERS%s%s" % [
 				str(game.get("host", "LAN game")), int(game.get("players", 0)),
-				int(game.get("capacity", 16)), "" if compatible else "  •  INCOMPATIBLE"]
+				int(game.get("capacity", 16)), progress,
+				"" if compatible else "  •  INCOMPATIBLE"]
 		button.disabled = not compatible
 		button.pressed.connect(func() -> void:
 			_ip_edit.text = str(game["address"])

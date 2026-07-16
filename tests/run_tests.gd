@@ -792,10 +792,14 @@ func test_hud_passes_mouse_through() -> void:
 			"seeker results row explains its score")
 	check(hud._replay_ready_button != null and hud._replay_start_button != null,
 			"results offer replay readiness and a host start action")
+	check(not hud._replay_start_button.disabled,
+			"host replay is available before any readiness update arrives")
 	hud.set_replay_readiness([1], 1, 2)
-	check(hud._replay_start_button.disabled, "host cannot replay before everyone opts in")
+	check(not hud._replay_start_button.disabled,
+			"host can replay before everyone opts in")
 	hud.set_replay_readiness([1, 2], 1, 2)
-	check(not hud._replay_start_button.disabled, "host can replay once everyone opts in")
+	check(not hud._replay_start_button.disabled,
+			"host replay remains available once everyone opts in")
 	bad.clear()
 	_collect_stop_controls(hud, bad)
 	check(bad.is_empty(), "results overlay ignores mouse too (offenders: %s)" % [bad])

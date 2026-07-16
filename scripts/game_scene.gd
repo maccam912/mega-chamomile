@@ -90,7 +90,9 @@ func _ready() -> void:
 
 func _server_setup_match() -> void:
 	match_state.configure(App.settings)
-	for id: int in Net.players:
+	for id: int in Net.round_player_ids:
+		if not Net.players.has(id):
+			continue
 		match_state.add_player(id, Net.players[id]["name"])
 	match_state.assign_role_ids(Net.assign_session_roles(App.settings["seeker_count"]))
 
