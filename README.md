@@ -20,6 +20,9 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
 - Nearby hosted games appear automatically on the main menu; manual IP joining
   remains available. Players can state a role preference, and replay role
   assignment rotates fairly across the lobby session.
+- Replays maintain separate opponent-adjusted hiding and seeking ratings. The
+  next round resizes hiders within safe limits so struggling hiders get smaller
+  bodies and strong seekers face smaller targets.
 - Hosts can configure phase times, seeker count, fixed or per-hider ammo,
   cooldown, scoring values, and map. Guests see the complete settings summary
   before the match starts.

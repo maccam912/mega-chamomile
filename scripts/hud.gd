@@ -16,6 +16,7 @@ signal start_seeking_requested
 var _phase_label: Label
 var _timer_label: Label
 var _role_label: Label
+var _balance_label: Label
 var _alive_label: Label
 var _swatch: ColorRect
 var _brush_preview: Control
@@ -136,6 +137,12 @@ func _ready() -> void:
 	_hint_label.add_theme_font_size_override("font_size", 13)
 	_hint_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
 	root.add_child(_hint_label)
+	_balance_label = Label.new()
+	_balance_label.position = Vector2(16, 76)
+	_balance_label.add_theme_font_size_override("font_size", 13)
+	_balance_label.add_theme_color_override("font_color", Color("e0b34d"))
+	_balance_label.visible = false
+	root.add_child(_balance_label)
 
 	# Alive counter, top-right.
 	_alive_label = Label.new()
@@ -303,6 +310,12 @@ func setup(role: int, is_host := false) -> void:
 
 func set_ragdoll(active: bool) -> void:
 	_ragdoll_button.text = "R  STAND UP" if active else "R  RAGDOLL"
+
+
+func set_balance_size(role: int, size_scale: float) -> void:
+	_balance_label.visible = role == MatchState.Role.HIDER
+	if _balance_label.visible:
+		_balance_label.text = "SKILL BALANCE  %d%% SIZE" % int(roundf(size_scale * 100.0))
 
 
 func on_phase(phase: int, duration: float, role: int, extra: Dictionary) -> void:
@@ -488,6 +501,9 @@ func show_results(scores: Array, winner: int, my_id: int, is_host := false) -> v
 		box.add_child(l)
 		var detail := Label.new()
 		detail.text = "        " + _score_breakdown(row)
+		if row.has("hiding_rating") and row.has("seeking_rating"):
+			detail.text += "        ratings  hide %d / seek %d" % [
+					int(row["hiding_rating"]), int(row["seeking_rating"])]
 		detail.add_theme_font_size_override("font_size", 13)
 		detail.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
 		box.add_child(detail)

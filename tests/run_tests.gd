@@ -26,11 +26,13 @@ func _initialize() -> void:
 	test_bold_scoring()
 	test_score_breakdown()
 	test_session_scoring_and_replay()
+	test_role_skill_balancing()
 	test_preference_aware_roles()
 	test_hidden_readiness()
 	test_disconnect_wins()
 	test_solo_mode()
 	test_avatar_contracts()
+	test_balanced_avatar_scaling()
 	test_paint_splat()
 	test_paint_stroke()
 	test_articulated_ragdoll()
@@ -333,6 +335,69 @@ func test_session_scoring_and_replay() -> void:
 	check(not session.totals.has(2), "disconnect removes score identity instead of allowing inheritance")
 
 
+func test_role_skill_balancing() -> void:
+	print("role-specific skill ratings + size balancing:")
+	var session: RefCounted = SessionStateScript.new()
+	session.reset([])
+	session.add_player(1, "One")
+	session.add_player(2, "Two")
+
+	var first: Array = session.record_round([
+		{"id": 1, "score": 0, "role": MatchStateScript.Role.HIDER, "alive": false},
+		{"id": 2, "score": 100, "role": MatchStateScript.Role.SEEKER, "alive": true},
+	])
+	var one: Dictionary = session.rating_snapshot(1)
+	var two: Dictionary = session.rating_snapshot(2)
+	check(one["hiding"] < session.DEFAULT_RATING and one["seeking"] == session.DEFAULT_RATING,
+			"a caught hider loses hiding skill without changing seeking skill")
+	check(two["seeking"] > session.DEFAULT_RATING and two["hiding"] == session.DEFAULT_RATING,
+			"a successful seeker gains seeking skill without changing hiding skill")
+	check(first[0].has("hiding_rating") and first[0].has("seeking_rating"),
+			"results expose both updated ratings")
+	check(session.balanced_hider_size(1, [2]) < 1.0,
+			"a weak hider facing a strong seeker is smaller next round")
+
+	var one_hiding_after_first: int = one["hiding"]
+	var two_seeking_after_first: int = two["seeking"]
+	session.record_round([
+		{"id": 1, "score": 100, "role": MatchStateScript.Role.SEEKER, "alive": true},
+		{"id": 2, "score": 0, "role": MatchStateScript.Role.HIDER, "alive": false},
+	])
+	one = session.rating_snapshot(1)
+	two = session.rating_snapshot(2)
+	check(one["hiding"] == one_hiding_after_first and one["seeking"] > session.DEFAULT_RATING,
+			"switching to seeker updates only that player's seeking estimate")
+	check(two["seeking"] == two_seeking_after_first and two["hiding"] < session.DEFAULT_RATING,
+			"switching to hider updates only that player's hiding estimate")
+
+	var survivors: RefCounted = SessionStateScript.new()
+	survivors.reset([1, 2])
+	survivors.record_round([
+		{"id": 1, "score": 75, "role": MatchStateScript.Role.HIDER, "alive": true},
+		{"id": 2, "score": 0, "role": MatchStateScript.Role.SEEKER, "alive": true},
+	])
+	check(survivors.balanced_hider_size(1, [2]) > 1.0,
+			"a strong hider facing a struggling seeker receives the inverse handicap")
+
+	# Force the estimator's legal extremes to prove even long streaks cannot
+	# produce a physics-breaking scale.
+	session.skill_ratings["One"]["hiding"] = session.MIN_RATING
+	session.skill_ratings["Two"]["seeking"] = session.MAX_RATING
+	check(is_equal_approx(session.balanced_hider_size(1, [2]), session.MIN_BALANCED_SIZE),
+			"combined shrinking is capped at the safe minimum")
+	session.skill_ratings["One"]["hiding"] = session.MAX_RATING
+	session.skill_ratings["Two"]["seeking"] = session.MIN_RATING
+	check(is_equal_approx(session.balanced_hider_size(1, [2]), session.MAX_BALANCED_SIZE),
+			"combined enlargement is capped at the safe maximum")
+	check(is_equal_approx(session.balanced_hider_size(1, []), 1.0),
+			"solo rounds stay at normal size because there is no opponent to balance")
+
+	session.remove_player(1)
+	session.add_player(10, "One")
+	check(session.rating_snapshot(10)["hiding"] == int(session.MAX_RATING),
+			"reconnecting identity retains its session skill estimates")
+
+
 func test_preference_aware_roles() -> void:
 	print("preference-aware role rotation:")
 	var session: RefCounted = SessionStateScript.new()
@@ -477,6 +542,35 @@ func test_avatar_contracts() -> void:
 	check(player_script.default_brush_radius_for_scale(float(cat_profile["scale"]))
 			< player_script.default_brush_radius_for_scale(float(dog_profile["scale"])),
 			"paint brush radius scales with the visible animal")
+
+
+func test_balanced_avatar_scaling() -> void:
+	print("balanced avatar scaling:")
+	var regular := AvatarCatalogScript.profile("human")
+	var smaller := AvatarCatalogScript.profile("human", 0.8)
+	check(is_equal_approx(float(smaller["scale"]), float(regular["scale"]) * 0.8),
+			"balance multiplier composes with the authored avatar scale")
+	check(Vector3(smaller["parts"][0]["size"]).is_equal_approx(
+			Vector3(regular["parts"][0]["size"]) * 0.8),
+			"visible body parts receive the balance multiplier")
+	check(is_equal_approx(float(smaller["collision_shapes"][0]["height"]),
+			float(regular["collision_shapes"][0]["height"]) * 0.8),
+			"movement collision receives the balance multiplier")
+	check(Vector3(smaller["camera_pivot"]).is_equal_approx(
+			Vector3(regular["camera_pivot"]) * 0.8),
+			"camera and gameplay anchors stay aligned with the resized body")
+	var body: PaintableBody = PaintableBodyScript.new()
+	body.build(22, Color.WHITE, "human", 0.8)
+	check(Vector3(body.parts[0]["size"]).is_equal_approx(
+			Vector3(regular["parts"][0]["size"]) * 0.8),
+			"paint and ragdoll geometry build at the balanced size")
+	body.free()
+	var minimum_body: PaintableBody = PaintableBodyScript.new()
+	minimum_body.build(23, Color.WHITE, "human", 0.25)
+	check(Vector3(minimum_body.parts[0]["size"]).is_equal_approx(
+			Vector3(regular["parts"][0]["size"]) * 0.25),
+			"the full avatar contract supports the 25% minimum size")
+	minimum_body.free()
 
 
 func _authored_avatar_height(body: PaintableBody) -> float:
@@ -679,6 +773,12 @@ func test_hud_passes_mouse_through() -> void:
 	check(hud._brush_ring.visible, "paint mode shows the brush ring")
 	check(hud._ring_pos == Vector2(120, 80) and is_equal_approx(hud._ring_px, 14.0),
 			"brush ring tracks cursor position and projected radius")
+	hud.set_balance_size(MatchStateScript.Role.HIDER, 0.92)
+	check(hud._balance_label.visible and "92% SIZE" in hud._balance_label.text,
+			"hiders can see their skill-balance size")
+	hud.set_balance_size(MatchStateScript.Role.SEEKER, 1.0)
+	check(not hud._balance_label.visible,
+			"seekers stay normal-sized and do not receive a size readout")
 	var rows := [
 		{"id": 1, "name": "Hider", "role": MatchStateScript.Role.HIDER, "score": 88,
 			"survival": 10, "bold": 3, "kills": 0, "kill_points": 0, "bonus": 75, "alive": true},

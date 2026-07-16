@@ -3,6 +3,24 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
+## Status: adaptive role skill balancing shipped (session 13, 2026-07-16)
+
+### Session 13: role ratings and bounded size handicaps (`BALANCE-01`)
+
+- Added separate opponent-adjusted hiding and seeking ratings to the
+  server-owned lobby session. Early games adapt quickly, established ratings
+  move more cautiously, role swaps update only the role played, and reconnects
+  retain estimates for the same lobby identity.
+- Each replay combines a hider's rating with the current seeker team's average
+  rating. Weak hiders and hiders facing strong seekers become smaller; the
+  inverse matchup becomes larger. The final size is capped at 25%–125%, while
+  seekers remain normal-sized.
+- Resizing is applied to the complete avatar contract—visible and paintable
+  geometry, movement/shot collision, ragdoll joints, cameras, brush scale, and
+  gameplay anchors. The HUD shows a hider's current percentage and results show
+  both ratings.
+- Verified: 255 headless checks pass and the Godot editor-load check is clean.
+
 ## Status: seeker follow camera and timed round reveal shipped (session 12, 2026-07-15)
 
 ### Session 12: hider camera and after-round reveal (`CAMERA-01`, `REVEAL-01`)

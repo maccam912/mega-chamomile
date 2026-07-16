@@ -25,9 +25,9 @@ var _authored_transforms: Array[Transform3D] = []
 
 
 func build(peer_id: int, base_color: Color,
-		selected_avatar := AvatarCatalog.DEFAULT_ID) -> void:
+		selected_avatar := AvatarCatalog.DEFAULT_ID, size_multiplier := 1.0) -> void:
 	avatar_id = AvatarCatalog.normalize(selected_avatar)
-	profile = AvatarCatalog.profile(avatar_id)
+	profile = AvatarCatalog.profile(avatar_id, size_multiplier)
 	parts = profile["parts"]
 	for i in parts.size():
 		var spec: Dictionary = parts[i]

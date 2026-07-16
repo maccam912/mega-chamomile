@@ -29,6 +29,24 @@ MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
 - **Seekers**: +100 per elimination, +50 team bonus each if all hiders found.
 - Eliminated hiders keep their accumulated points; survivors get +75 bonus.
 
+## Session skill balancing
+
+- Every stable lobby identity has independent **hiding** and **seeking**
+  ratings. A round compares each hider with the current seeker team's average:
+  survival is a hider win and elimination is a seeker win. New estimates move
+  quickly; the update rate settles after repeated games.
+- On replay, only hiders are resized. Lower-rated hiders become smaller,
+  higher-rated hiders become larger, strong seekers face smaller hiders, and
+  struggling seekers face larger hiders. The two effects combine and clamp to
+  25%–125% of the selected avatar's authored size.
+- The multiplier is applied while constructing body meshes, movement and shot
+  collisions, ragdoll joints, paint brushes, cameras, nameplates, and gameplay
+  anchors. Seekers remain at their normal authored size.
+- Ratings are server-authoritative and live for the current lobby session,
+  including reconnects with the same lobby identity; leaving the lobby resets
+  them. Both ratings appear on the results screen and hiders see their current
+  size percentage in the HUD.
+
 ## The paint mechanic (MVP implementation)
 
 - Each catalog-authored body is assembled from **subdivided BoxMeshes** with a
@@ -81,6 +99,7 @@ match plays out in a headless unit test:
 autoload/Game.gd        # scene transitions + app state (current match settings)
 autoload/Net.gd         # ENet host/join + player registry + signals
 scripts/match_state.gd  # PURE match rules (testable headless)
+scripts/session_state.gd # replay totals, role rotation, and role skill ratings
 scripts/player.gd       # CharacterBody3D: move, camera, paint, shoot
 scripts/avatar_catalog.gd # data-authored human/cat/dog rigs + gameplay anchors
 scripts/paintable_body.gd # shared segmented avatar, vertex paint + ragdoll API

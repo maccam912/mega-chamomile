@@ -161,9 +161,13 @@ static func normalize(avatar_id: String) -> String:
 	return avatar_id if is_valid(avatar_id) else DEFAULT_ID
 
 
-static func profile(avatar_id: String) -> Dictionary:
+static func profile(avatar_id: String, size_multiplier := 1.0) -> Dictionary:
 	var data: Dictionary = AVATARS[normalize(avatar_id)].duplicate(true)
-	var avatar_scale := float(data.get("scale", 1.0))
+	var avatar_scale := float(data.get("scale", 1.0)) * maxf(size_multiplier, 0.01)
+	# Consumers use this value for brushes, cameras, impulses, and UI offsets,
+	# so expose the complete effective scale rather than only the authored
+	# species scale.
+	data["scale"] = avatar_scale
 	for part: Dictionary in data["parts"]:
 		part["size"] = Vector3(part["size"]) * avatar_scale
 		part["pos"] = Vector3(part["pos"]) * avatar_scale

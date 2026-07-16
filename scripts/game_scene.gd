@@ -100,8 +100,13 @@ func _server_setup_match() -> void:
 	var payload := {"players": []}
 	var hi := 0
 	var si := 0
+	var seeker_ids := match_state.seekers()
 	for id: int in match_state.players:
 		var role: int = match_state.players[id]["role"]
+		var balance_size: float = (
+				Net.session.balanced_hider_size(id, seeker_ids)
+				if role == MatchState.Role.HIDER else 1.0)
+		var ratings: Dictionary = Net.session.rating_snapshot(id)
 		var pos: Vector3
 		if role == MatchState.Role.SEEKER:
 			pos = seeker_spots[si % seeker_spots.size()]
@@ -114,6 +119,9 @@ func _server_setup_match() -> void:
 			"name": match_state.players[id]["name"],
 			"avatar": AvatarCatalog.normalize(str(Net.players[id].get("avatar", AvatarCatalog.DEFAULT_ID))),
 			"role": role,
+			"balance_size": balance_size,
+			"hiding_rating": ratings["hiding"],
+			"seeking_rating": ratings["seeking"],
 			"pos": pos,
 		})
 	Net.broadcast_match_setup(payload)
@@ -245,9 +253,11 @@ func _server_handle_shot(shooter_id: int, origin: Vector3, dir: Vector3) -> void
 
 func _on_match_setup(payload: Dictionary) -> void:
 	var my_id := multiplayer.get_unique_id()
+	var my_balance_size := 1.0
 	for info: Dictionary in payload["players"]:
 		if int(info["id"]) == my_id:
 			my_role = int(info["role"])
+			my_balance_size = float(info.get("balance_size", 1.0))
 	total_hiders = 0
 	for info: Dictionary in payload["players"]:
 		if int(info["role"]) == MatchState.Role.HIDER:
@@ -256,6 +266,7 @@ func _on_match_setup(payload: Dictionary) -> void:
 	print("[game] match setup: %d players, my_role=%s" % [
 			payload["players"].size(), MatchState.Role.keys()[my_role]])
 	hud.setup(my_role, Net.is_server())
+	hud.set_balance_size(my_role, my_balance_size)
 	hud.set_alive(total_hiders, total_hiders)
 	# Hiders' nameplates would betray them: seekers never see them.
 	if my_role == MatchState.Role.SEEKER:
@@ -272,6 +283,7 @@ func _spawn_player(info: Dictionary) -> void:
 	p.name = str(int(info["id"]))
 	p.display_name = str(info["name"])
 	p.avatar_id = AvatarCatalog.normalize(str(info.get("avatar", AvatarCatalog.DEFAULT_ID)))
+	p.balance_size = float(info.get("balance_size", 1.0))
 	p.role = int(info["role"])
 	p.position = info["pos"]
 	p.respawn_position = info["pos"]

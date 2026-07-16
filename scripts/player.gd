@@ -29,6 +29,7 @@ const BRUSH_STEP := 0.02
 var peer_id := 1
 var display_name := "?"
 var avatar_id := AvatarCatalog.DEFAULT_ID
+var balance_size := 1.0
 var role: int = MatchState.Role.NONE
 var phase: int = MatchState.Phase.LOBBY
 var eliminated := false
@@ -92,7 +93,8 @@ func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 1
 
-	var avatar := AvatarCatalog.profile(avatar_id)
+	balance_size = clampf(balance_size, 0.25, 1.25)
+	var avatar := AvatarCatalog.profile(avatar_id, balance_size)
 	_avatar_scale = float(avatar["scale"])
 	brush_radius = default_brush_radius_for_scale(_avatar_scale)
 	_camera_local_offset = CAMERA_LOCAL_OFFSET * _avatar_scale
@@ -110,7 +112,7 @@ func _ready() -> void:
 	body.name = "Body"
 	add_child(body)
 	var base := Color(0.13, 0.13, 0.16) if role == MatchState.Role.SEEKER else Color.WHITE
-	body.build(peer_id, base, avatar_id)
+	body.build(peer_id, base, avatar_id, balance_size)
 	avatar_id = body.avatar_id
 	if role == MatchState.Role.SEEKER:
 		_add_gun()
