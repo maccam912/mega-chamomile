@@ -115,6 +115,12 @@ func _run() -> void:
 		await physics_frame
 	var seeker_follow_turn_converged: bool = (-player._rig.global_basis.z).dot(
 			Vector3.FORWARD) > 0.995
+	player.on_eliminated()
+	seeker.position += Vector3(2, 0, 1)
+	await physics_frame
+	var seeker_follow_survived_elimination: bool = player.eliminated \
+			and player.is_following_seeker() and player._rig.top_level \
+			and player._rig.global_position.distance_to(seeker.eye_position_global()) < 0.02
 	player.clear_follow_target()
 	var seeker_follow_returned: bool = not player.is_following_seeker() and not player.frozen \
 			and not player._rig.top_level \
@@ -134,15 +140,16 @@ func _run() -> void:
 			initial_fly_continuous, orbit_centered and orbit_enabled, fly_enabled,
 			orbit_to_fly_continuous, fly_moved, follow_restored])
 	print(("seeker follow started=%s, tracked=%s, read_only=%s, smoothed=%s, " \
-			+ "converged=%s, returned=%s") % [
+			+ "converged=%s, survived elimination=%s, returned=%s") % [
 			seeker_follow_started, seeker_follow_tracked, seeker_follow_read_only,
 			seeker_follow_turn_smoothed, seeker_follow_turn_converged,
-			seeker_follow_returned])
+			seeker_follow_survived_elimination, seeker_follow_returned])
 	print("reveal standing pose frozen=%s" % reveal_standing_frozen)
 	quit(0 if laid_down and tilted and momentum_inherited and continued_forward \
 			and initial_fly_continuous and orbit_centered \
 			and orbit_enabled and fly_enabled and orbit_to_fly_continuous and fly_moved \
 			and follow_restored and seeker_follow_started and seeker_follow_tracked \
 			and seeker_follow_read_only and seeker_follow_turn_smoothed \
-			and seeker_follow_turn_converged and seeker_follow_returned \
+			and seeker_follow_turn_converged and seeker_follow_survived_elimination \
+			and seeker_follow_returned \
 			and reveal_standing_frozen else 1)

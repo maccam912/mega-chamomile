@@ -246,8 +246,9 @@ func eye_position_global() -> Vector3:
 
 
 func on_eliminated() -> void:
-	if is_following_seeker():
-		clear_follow_target()
+	# A hider may already be watching the seeker who found them. Keep that
+	# camera attached through elimination; phase changes and target despawns
+	# still perform the normal follow cleanup.
 	set_ragdoll(false)
 	# Do not defer this transition to _process(): the final elimination can be
 	# followed immediately by the results UI unlocking the cursor.
@@ -623,7 +624,7 @@ func set_ragdoll(active: bool) -> void:
 				_enter_ragdoll_orbit_camera()
 			else:
 				_enter_ragdoll_fly_camera()
-		else:
+		elif not is_following_seeker():
 			_restore_follow_camera()
 
 

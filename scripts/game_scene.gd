@@ -355,7 +355,6 @@ func _on_player_eliminated(victim_id: int, shooter_id: int) -> void:
 			alive += 1
 	hud.set_alive(alive, total_hiders)
 	if victim_id == multiplayer.get_unique_id():
-		_stop_following_seeker()
 		hud.show_banner("ELIMINATED", Color("ff5a4d"))
 		hud.set_spotted(false)
 
