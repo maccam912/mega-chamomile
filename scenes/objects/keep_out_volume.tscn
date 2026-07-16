@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://dya6nqxsnrovn"]
+
+[ext_resource type="Script" uid="uid://id5lo7gn5ci" path="res://scripts/keep_out_volume.gd" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="BoxShape_keep_out"]
+size = Vector3(4, 4, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_preview"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0.0156863, 0.25098, 0.55)
+emission_enabled = true
+emission = Color(1, 0.0156863, 0.25098, 1)
+emission_energy_multiplier = 1.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_preview"]
+material = SubResource("StandardMaterial3D_preview")
+size = Vector3(4, 4, 4)
+
+[node name="KeepOutVolume" type="Area3D" unique_id=2094600505]
+editor_description = "Duplicate, move, rotate, and scale this volume to cover forbidden spaces. Toggle Preview Through Geometry for an X-ray view while editing. A standing player or ragdoll touching it is returned to that player's assigned spawn. The volume is invisible during play."
+collision_layer = 0
+collision_mask = 6
+monitorable = false
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1448865161]
+shape = SubResource("BoxShape_keep_out")
+debug_color = Color(0.99999994, 0.100269355, 0.31709766, 1)
+
+[node name="EditorPreview" type="MeshInstance3D" parent="."]
+cast_shadow = 0
+mesh = SubResource("BoxMesh_preview")

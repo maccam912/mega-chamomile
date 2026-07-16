@@ -44,6 +44,7 @@ func _initialize() -> void:
 	test_wall_climb()
 	test_unstuck_action()
 	test_fall_recovery()
+	test_keep_out_volume()
 	test_map_selection()
 	test_lan_ip_selection()
 
@@ -881,6 +882,47 @@ func test_fall_recovery() -> void:
 	player.free()
 
 
+func test_keep_out_volume() -> void:
+	print("keep-out volume:")
+	var scene := load("res://scenes/objects/keep_out_volume.tscn") as PackedScene
+	check(scene != null, "reusable keep-out volume scene loads")
+	if scene == null:
+		return
+	var volume := scene.instantiate() as Area3D
+	check(volume.collision_layer == 0, "keep-out volume does not physically block players")
+	check(volume.collision_mask == 6,
+			"keep-out volume monitors standing players and ragdoll parts")
+	var collision := volume.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	check(collision != null and collision.shape is BoxShape3D,
+			"keep-out volume has an editor-scalable box shape")
+	var preview := volume.get_node_or_null("EditorPreview") as MeshInstance3D
+	check(preview != null and preview.mesh is BoxMesh,
+			"keep-out volume has a prominent editor preview")
+	check(not volume.preview_through_geometry,
+			"keep-out preview is occluded by map geometry by default")
+	volume.preview_through_geometry = true
+	var preview_material := preview.material_override as StandardMaterial3D
+	check(preview_material != null and preview_material.no_depth_test,
+			"keep-out preview can be toggled to show through geometry")
+	volume.preview_through_geometry = false
+	check(not preview_material.no_depth_test,
+			"keep-out preview can be toggled back to normal occlusion")
+
+	var player = load("res://scripts/player.gd").new()
+	var ragdoll_part := RigidBody3D.new()
+	player.add_child(ragdoll_part)
+	check(volume.recovery_target_for(player) == player,
+			"standing player resolves to the recovery target")
+	check(volume.recovery_target_for(ragdoll_part) == player,
+			"ragdoll part resolves to its owning player")
+	var unrelated_body := Node3D.new()
+	check(volume.recovery_target_for(unrelated_body) == null,
+			"unrelated physics bodies are ignored")
+	unrelated_body.free()
+	player.free()
+	volume.free()
+
+
 func test_map_selection() -> void:
 	print("map selection:")
 	var app := AppScript.new()
@@ -899,6 +941,8 @@ func test_map_selection() -> void:
 		if map_id == "empty":
 			check(instance.get_node_or_null("Floor") != null, "empty map floor is authored in the scene")
 		if map_id == "hallwyl_museum":
+			check(instance.get_node_or_null("KeepOutVolumes/KeepOutVolume") != null,
+					"Hallwyl Museum includes a duplicable keep-out volume")
 			var museum := instance.get_node_or_null("Museum")
 			var concave_collision_count := 0
 			if museum != null:

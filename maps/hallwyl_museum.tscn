@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene format=3 uid="uid://c1arnvdhiuvha"]
 
-[ext_resource type="Script" path="res://maps/hallwyl_museum.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://o06pncnt8i1" path="res://maps/hallwyl_museum.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/objects/hallwyl_museum.scn" id="2_model"]
+[ext_resource type="PackedScene" uid="uid://dya6nqxsnrovn" path="res://scenes/objects/keep_out_volume.tscn" id="3_keep_out"]
 
 [sub_resource type="Environment" id="Environment_hallwyl"]
 background_mode = 1
@@ -11,7 +12,12 @@ ambient_light_color = Color(1, 1, 1, 1)
 ambient_light_energy = 0.8
 reflected_light_source = 2
 
-[node name="HallwylMuseum" type="Node3D"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_phgtk"]
+size = Vector3(4.33, 2.85, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jpqgc"]
+
+[node name="HallwylMuseum" type="Node3D" unique_id=983145329]
 script = ExtResource("1_script")
 metadata/title = "The Hallwyl Museum 1st Floor Combined"
 metadata/creator = "Thomas Flynn"
@@ -21,12 +27,31 @@ metadata/license = "CC BY 4.0"
 metadata/license_url = "https://creativecommons.org/licenses/by/4.0/"
 metadata/changes = "Converted to a Godot game map and supplied with concave collision meshes."
 
-[node name="Museum" parent="." instance=ExtResource("2_model")]
+[node name="Museum" parent="." unique_id=1874089063 instance=ExtResource("2_model")]
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="KeepOutVolumes" type="Node3D" parent="." unique_id=145820550]
+editor_description = "Duplicate and position the child KeepOutVolume wherever players must not enter."
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -15.095111, 0)
+
+[node name="KeepOutVolume" parent="KeepOutVolumes" unique_id=1800533688 instance=ExtResource("3_keep_out")]
+transform = Transform3D(8.10378, 0, 0, 0, 1, 0, 0, 0, 17.161148, 0.042536736, 12.314022, 9.181969)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=381190966]
 environment = SubResource("Environment_hallwyl")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
-rotation_degrees = Vector3(-55, 30, 0)
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=263323290]
+transform = Transform3D(0.8660254, -0.40957603, 0.28678823, 0, 0.57357645, 0.81915206, -0.5, -0.7094065, 0.49673176, 0, 0, 0)
 light_energy = 0.35
 shadow_enabled = true
+
+[node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=1992066948]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.94602, 1.2607266, 16.235256)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D" unique_id=1634995173]
+shape = SubResource("BoxShape3D_phgtk")
+
+[node name="StaticBody3D2" type="StaticBody3D" parent="." unique_id=269989334]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D2" unique_id=799416999]
+transform = Transform3D(31.15975, 0, 0, 0, 1, 0, 0, 0, 49.31622, 0, 10.35511, 0)
+shape = SubResource("BoxShape3D_jpqgc")
