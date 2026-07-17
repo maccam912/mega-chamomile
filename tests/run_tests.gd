@@ -9,6 +9,7 @@ const PaintableBodyScript := preload("res://scripts/paintable_body.gd")
 const AvatarCatalogScript := preload("res://scripts/avatar_catalog.gd")
 const AppScript := preload("res://autoload/app.gd")
 const LANAddressScript := preload("res://scripts/lan_address.gd")
+const IrohRoomCodeScript := preload("res://scripts/iroh_room_code.gd")
 const UIThemeScript := preload("res://scripts/ui_theme.gd")
 const PaintBackdropScript := preload("res://scripts/paint_backdrop.gd")
 
@@ -49,6 +50,8 @@ func _initialize() -> void:
 	test_keep_out_volume()
 	test_map_selection()
 	test_lan_ip_selection()
+	test_iroh_room_codes()
+	test_iroh_unreliable_packet_budget()
 
 	print("")
 	if _failures == 0:
@@ -520,6 +523,10 @@ func test_avatar_contracts() -> void:
 		avatar.set_ragdoll(true, false)
 		check(avatar.capture_pose().size() == avatar.parts.size(),
 				"%s replicates every ragdoll transform" % avatar_id)
+		var packed_pose := avatar.capture_network_pose()
+		check(packed_pose.size() == avatar.parts.size() * 7
+				and avatar.decode_network_pose(packed_pose).size() == avatar.parts.size(),
+				"%s compact network pose round-trips every body part" % avatar_id)
 		avatar.set_ragdoll(false, false)
 		check(avatar.part_bodies[0].transform.is_equal_approx(avatar._authored_transforms[0]),
 				"%s restores its authored standing pose" % avatar_id)
@@ -1072,3 +1079,30 @@ func test_lan_ip_selection() -> void:
 	check(LANAddressScript.preferred(PackedStringArray([
 			"127.0.0.1", "169.254.1.2", "fe80::1"
 	])).is_empty(), "loopback, link-local, and IPv6 addresses are not advertised")
+
+
+func test_iroh_room_codes() -> void:
+	print("iroh room codes:")
+	var valid_code := "A".repeat(42) + "_"
+	check(IrohRoomCodeScript.is_valid(valid_code),
+			"a 32-byte base64url endpoint ID is accepted")
+	check(IrohRoomCodeScript.normalize("  %s\n" % valid_code) == valid_code,
+			"clipboard whitespace is removed")
+	check(not IrohRoomCodeScript.is_valid(valid_code + "A"),
+			"codes with the wrong length are rejected")
+	check(not IrohRoomCodeScript.is_valid("!" + valid_code.substr(1)),
+			"characters outside base64url are rejected")
+
+
+func test_iroh_unreliable_packet_budget() -> void:
+	print("iroh unreliable packet budget:")
+	for avatar_id: String in AvatarCatalogScript.ORDER:
+		var body: PaintableBody = PaintableBodyScript.new()
+		body.build(1, Color.WHITE, avatar_id)
+		var sync_arguments := [Vector3.ZERO, 0.0, Vector3.FORWARD, false, true,
+				body.capture_network_pose()]
+		var serialized_size := var_to_bytes(sync_arguments).size()
+		check(serialized_size <= 900,
+				"%s ragdoll state leaves iroh datagram headroom (%d bytes)" % [
+						avatar_id, serialized_size])
+		body.free()

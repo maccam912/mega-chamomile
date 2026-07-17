@@ -20,6 +20,11 @@ requests. It is planning documentation; items are unimplemented unless marked
   manual IP remains available. In-progress hosts stay discoverable, late
   arrivals wait for the next round, and active-roster snapshots keep them out
   of current scene barriers.
+- `NET-02` **IMPLEMENTED — internet/cross-platform QA pending**: ENet remains
+  the default LAN/IP protocol, while a separately selected godot-iroh peer can
+  host and join through a shareable endpoint code. Desktop runtimes are pinned
+  and packaged, the same RPC game loop completes end to end over iroh, and
+  compact ragdoll packets stay within its unreliable datagram budget.
 - `REVEAL-01` **SHIPPED**: survivor poses and paint remain intact in RESULTS,
   frozen ragdolls cannot be pushed, high-contrast markers reveal survivors,
   and Tab switches between the scoreboard and read-only scene inspection.
@@ -92,7 +97,7 @@ after investigation, especially for bugs.
 | `ROLE-01` | **SHIPPED** | High | `ROUND-01`, `SCORE-02` | Preferences, persistent history, fairness, replication, and rule tests are implemented. |
 | `SETTINGS-01` | L | High | All rule features | The UI is straightforward, but several settings affect different runtime systems and validation rules. |
 | `AVATAR-01` | S–M prototype / L body-scale | Medium | `MOVE-01`, `BUG-01` | Making maps uniformly larger may achieve the desired relative size more safely than scaling the articulated bodies. |
-| `NET-02` | S integration spike / M hardening | Medium | `NET-01`, networking architecture | The existing Godot Iroh addon already implements `MultiplayerPeerExtension`, transfer modes, peer IDs, and host relay behavior. Paint-n-Seek still needs version pinning/updating, unreliable ragdoll packet-size validation, a small target-peer audit, and cross-platform packaging. See `IROH_FEASIBILITY.md`. |
+| `NET-02` | **IMPLEMENTED — hardening QA pending** | Medium | `NET-01`, networking architecture | Pinned godot-iroh desktop runtimes, explicit host/join-by-code UI, transport selection, failure reporting, and compact unreliable ragdoll packets are implemented without replacing ENet. Cross-network, three-client, relay transition, and Windows/Linux hardware QA remain. See `IROH_FEASIBILITY.md`. |
 | `MODE-01` | XL | High | Build after reusable round/settings state | Requires a second authoritative game loop, ghost state, tag handoffs, UI, scoring, and edge-case tests. |
 | `AVATAR-02` | **SHIPPED** | Medium | Avatar contract + physics/play tests | Human, Cat, and Dog share one catalog-driven painting/ragdoll pipeline with replicated lobby selection. |
 
@@ -658,44 +663,50 @@ show that voice chat makes it exploitable.
 
 ## P3 — Explore easier internet connections
 
-### NET-02: Investigate Iroh for easier internet connections
+### NET-02: Add Iroh for easier internet connections — **IMPLEMENTED; HARDENING QA PENDING**
 
-**Concept:** Run a focused feasibility spike on using the
+**Implemented baseline:** The game now uses the
 [Iroh networking stack](https://docs.iroh.computer/what-is-iroh) so players
-could connect by a stable endpoint identity or invitation instead of exchanging
-IP addresses. Evaluate its discovery, authenticated QUIC connections, NAT
-traversal, and relay fallback without assuming it can directly replace Godot's
-current `ENetMultiplayerPeer`.
+can connect by a shareable endpoint code instead of exchanging IP addresses.
+This is a second, explicitly selected `MultiplayerPeer`; the existing ENet LAN,
+automatic discovery, and manual-IP flow remain independent and available.
 
-**Investigation goals:**
+Completed in the integration:
 
-- Prototype the smallest viable Godot integration, comparing GDExtension,
-  `iroh-ffi`, and a sidecar process rather than committing to an architecture
-  up front.
-- Determine whether Iroh datagrams or streams can back Godot's high-level
-  multiplayer/RPC model, or whether adopting it would require a separate game
-  transport and replication layer.
+- Pinned MIT-licensed godot-iroh desktop binaries are included for universal
+  macOS, Windows x86_64, and Linux x86_64 with provenance and checksums.
+- **Host by Code**, **Join Code**, lobby display/copy, validation, CLI helpers,
+  transport-specific errors, and graceful platform availability checks are in
+  place.
+- The normal lobby registry, settings, match load, reliable RPCs, gameplay
+  phases, scoring, disconnects, and late-join architecture are shared by both
+  transports. A two-player iroh smoke completed a full fast round.
+- Ragdoll sync now packs each rigid-body transform as position plus quaternion;
+  all avatars serialize below 550 bytes before RPC framing, safely below the
+  addon's 1,024-byte unreliable-packet ceiling.
+- LAN discovery was repaired independently and has a retained-peer refresh
+  smoke, so iroh availability cannot break nearby-game discovery.
+
+Remaining hardening goals:
+
 - Demonstrate two peers discovering or exchanging endpoint information,
-  connecting across different networks, and completing a minimal gameplay
-  message round trip.
+  connecting across different real internet networks, and completing a full
+  representative round.
 - Test direct connections, NAT traversal, network changes, and relay fallback;
   record latency, bandwidth, reconnection behavior, and failure messages.
-- Define the player-facing connection flow, such as short invitation codes,
-  shareable tickets, or a friends/lobby discovery service, without exposing raw
-  endpoint details unnecessarily.
+- Optionally add a rendezvous service for friendlier short codes; the current
+  43-character endpoint code is self-contained and needs no game-operated
+  lookup service.
 - Evaluate export size, supported platforms, Rust/native build maintenance,
   relay hosting and operating cost, service availability, abuse controls, and
   security implications.
-- Keep `NET-01` independent: LAN discovery should still work without Iroh or an
-  internet connection.
-- Do not replace the current ENet implementation until a prototype proves that
-  hosting, joining, replication, disconnect handling, and representative
-  gameplay traffic work reliably in exported builds.
+- Upgrade from the pinned packaged baseline to a reviewed iroh 1.x godot-iroh
+  build after upstream's migration lands, and repeat interoperability tests.
 
-**Reference:** Iroh currently documents endpoint-ID-based discovery, direct
-QUIC connections with NAT traversal, and encrypted relay fallback. These are
-promising capabilities to evaluate, not evidence that it already integrates
-with Godot or this game's authoritative multiplayer model.
+**Reference:** Iroh documents endpoint-ID-based discovery, direct QUIC
+connections with NAT traversal, and encrypted relay fallback. The local
+same-machine game/RPC integration is proven; real-NAT and relay behavior still
+needs the external-network QA listed above.
 
 ## P3 — Long-term avatar variety
 

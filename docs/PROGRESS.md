@@ -3,6 +3,28 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
+## Status: repaired LAN discovery + second iroh transport implemented (session 14, 2026-07-16)
+
+### Session 14: retained UDP discovery and join-by-code (`NET-01`, `NET-02`)
+
+- Fixed LAN discovery by retaining each `UDPServer`-accepted peer for future
+  probes, expiring inactive peers, and explicitly using IPv4 broadcast sockets.
+  Advertisements carry a stable session ID so broadcast and loopback replies
+  deduplicate while preferring the routable LAN address.
+- Kept ENet as the default **Host on LAN** / manual-IP transport and added
+  godot-iroh as a separately selected **Host by Code** / **Join Code** path.
+  Hosts can copy the endpoint code in the lobby; validation, CLI helpers,
+  transport-specific errors, and unsupported-platform fallback are included.
+- Vendored pinned MIT-licensed Windows x86_64, Linux x86_64, and universal
+  macOS godot-iroh runtimes under Git LFS with source/checksum provenance.
+- Repacked unreliable ragdoll state as float32 position/quaternion arrays. The
+  Human, Cat, and Dog payload checks are 380, 548, and 520 bytes respectively,
+  safely below the addon's 1,024-byte datagram ceiling.
+- Verified: 266 headless checks pass; LAN discovery is found and refreshed by
+  the loopback integration smoke; Godot 4.7 loads the extension cleanly; and a
+  two-process iroh game registered both peers and completed a full fast round.
+  External-network NAT/relay and Windows/Linux hardware QA remain.
+
 ## Status: adaptive role skill balancing shipped (session 13, 2026-07-16)
 
 ### Session 13: role ratings and bounded size handicaps (`BALANCE-01`)
@@ -302,9 +324,10 @@ eliminations, spectator mode, sounds, and HUD.
 
 ### File map
 - `autoload/app.gd` — settings, scene transitions, InputMap, CLI flags
-  (`--host --join --name --avatar ID --autostart N --fast-phases --quit-after S
-  --screenshot path --screenshot-at S`)
-- `autoload/net.gd` — ENet host/join, player registry, ALL orchestration RPCs
+  (`--host --join --host-code --join-code --name --avatar ID --autostart N
+  --fast-phases --quit-after S --screenshot path --screenshot-at S`)
+- `autoload/net.gd` — ENet/Iroh selection, LAN discovery, player registry, and
+  ALL orchestration RPCs
 - `scripts/match_state.gd` — PURE rules (phases/roles/scores/ammo/wins)
 - `scripts/game_scene.gd` — server: MatchState+LoS+shots; all: spawn/FX/HUD
 - `scripts/player.gd` — move/camera/paint/eyedrop/shoot/sync/spectator
@@ -316,7 +339,8 @@ eliminations, spectator mode, sounds, and HUD.
   `hider_spawns()/seeker_spawns()/set_seek_open(bool)`
 - `maps/map_empty.tscn` — blank editor-authored floor/lighting scaffold;
   its script only implements the map contract and creates no objects
-- `tests/run_tests.gd` — headless suite
+- `tests/run_tests.gd` — headless suite; `tests/lan_discovery_smoke.tscn` —
+  retained-peer LAN discovery regression smoke
 
 ### Next steps (in rough priority order)
 1. **Two-window human playtest** (host + join 127.0.0.1): paint feel, shoot
@@ -329,8 +353,9 @@ eliminations, spectator mode, sounds, and HUD.
 4. Poses: lean/flatten-against-wall (the third P of the original game).
 5. Build out `map_empty.tscn` manually in the editor; it is already selectable
    from the host's lobby settings.
-6. Later: texture painting upgrade (analytic box UVs), party codes/lobby
-   service instead of raw IPs, host migration, late-join spectators.
+6. Later: texture painting upgrade (analytic box UVs), friendly short-code
+   rendezvous on top of iroh endpoint codes, host migration, late-join
+   spectators.
 
 ### Gotchas learned (respect these)
 - Autoload is `App`, not `Game` — a scene root named "Game" would collide

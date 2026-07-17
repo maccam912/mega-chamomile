@@ -17,13 +17,14 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
   ammo before the timer runs out. The round ends early once every seeker's
   final shot has resolved. A configurable 10-second reveal then marks surviving
   hiding spots before the untimed results/ready-up screen.
-- Nearby hosted games appear automatically on the main menu; manual IP joining
-  remains available, including games already in progress. Mid-round arrivals
-  wait safely and enter when the host starts the next round; departures never
-  hold up a round or ready-up barrier. Replay readiness is informational, so
-  the host can start whenever the group is ready enough. Players can state a
-  role preference, and replay role assignment rotates fairly across the lobby
-  session.
+- Nearby ENet games appear automatically on the main menu, and manual IP
+  joining remains available. As a separate internet-friendly option, a host
+  can create an encrypted iroh room and share its compact code; no IP address
+  or port forwarding is required. Mid-round arrivals wait safely and enter
+  when the host starts the next round; departures never hold up a round or
+  ready-up barrier. Replay readiness is informational, so the host can start
+  whenever the group is ready enough. Players can state a role preference,
+  and replay role assignment rotates fairly across the lobby session.
 - Replays maintain separate opponent-adjusted hiding and seeking ratings. The
   next round resizes hiders within safe limits so struggling hiders get smaller
   bodies and strong seekers face smaller targets.
@@ -33,8 +34,10 @@ into the world, inspired by MECCHA CHAMELEON. Built with Godot 4.7
 
 ## Run
 
-Open in Godot 4.7 and press F5. For a local 2-player test, run two instances:
-one hosts, one joins `127.0.0.1`.
+Open in Godot 4.7 and press F5. Choose **Host on LAN** for the existing ENet
+flow, or **Host by Code** and send the displayed code to the other players.
+For a local 2-player ENet test, run two instances: one hosts, one joins
+`127.0.0.1`.
 
 For family computers, download the launcher for that operating system from the
 latest GitHub Release once and double-click it. The launcher checks for the
@@ -43,9 +46,9 @@ then starts the game. It keeps the previous working version available when an
 update fails or the computer is offline. See `launcher/README.md` for platform
 paths and implementation details.
 
-CLI helpers (after `--`): `--name X`, `--host`, `--join <ip>`,
-`--autostart <n>` (host starts when n players present), `--fast-phases`,
-`--quit-after <s>`.
+CLI helpers (after `--`): `--name X`, `--host`, `--join <ip>`, `--host-code`,
+`--join-code <code>`, `--autostart <n>` (host starts when n players present),
+`--fast-phases`, `--quit-after <s>`.
 
 Headless E2E smoke:
 
@@ -58,13 +61,14 @@ godot --headless -- --join 127.0.0.1 --name Guest --quit-after 30
 
 ```sh
 godot --headless -s tests/run_tests.gd
+godot --headless tests/lan_discovery_smoke.tscn
 ```
 
 ## Docs
 
 - `docs/DESIGN.md` — mechanics, scoring, architecture decisions
 - `docs/PROGRESS.md` — current build state, pick-up-here notes
-- `docs/IROH_FEASIBILITY.md` — researched NAT-traversal transport migration
+- `docs/IROH_FEASIBILITY.md` — iroh integration status and remaining hardening
 
 ## Credits
 

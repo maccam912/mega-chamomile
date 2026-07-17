@@ -52,7 +52,7 @@ var reduce_motion := false
 ## Stable for this app process so reconnecting to the same lobby retains role
 ## history without conflating two players who chose the same display name.
 var lobby_identity := "%d-%d" % [Time.get_ticks_usec(), randi()]
-var cli := {}  ## parsed user args: name/host/join/autostart/fast-phases/quit-after
+var cli := {}  ## name/host/join/host-code/join-code/autostart/fast-phases/etc.
 
 var _ui_player: AudioStreamPlayer
 

@@ -1,7 +1,7 @@
 extends Node
-## Networking singleton: ENet host/join, replicated player registry, and every
-## match-orchestration RPC. Living on an autoload means RPC node paths always
-## match on every peer, regardless of which scene is loaded.
+## Networking singleton: selectable ENet/Iroh transport, replicated player
+## registry, and every match-orchestration RPC. Living on an autoload means RPC
+## node paths always match on every peer, regardless of the active scene.
 
 signal players_changed
 signal join_failed(msg: String)
@@ -26,14 +26,21 @@ signal settings_changed(settings: Dictionary)
 signal lan_games_changed(games: Array)
 
 const SessionStateScript := preload("res://scripts/session_state.gd")
+const IrohRoomCode := preload("res://scripts/iroh_room_code.gd")
+const IROH_BRIDGE_PATH := "res://scripts/iroh_bridge.gd"
+const TRANSPORT_OFFLINE := "offline"
+const TRANSPORT_ENET := "enet"
+const TRANSPORT_IROH := "iroh"
 const DISCOVERY_PORT := 24566
 const DISCOVERY_REQUEST := "PAINT_N_SEEK_DISCOVER_V1"
 const DISCOVERY_PROTOCOL := 1
 const DISCOVERY_PROBE_INTERVAL := 1.0
 const DISCOVERY_STALE_SECONDS := 3.5
+const DISCOVERY_PEER_STALE_SECONDS := 10.0
 
 var players := {}  ## peer_id -> {"name": String, "avatar": String, "preference": String}
 var my_name := "Painter"
+var active_transport := TRANSPORT_OFFLINE
 ## Frozen at the instant a round load begins. Players who connect afterward
 ## remain in `players` but do not participate until the next round load.
 var round_player_ids: Array[int] = []
@@ -45,9 +52,12 @@ var session: RefCounted = SessionStateScript.new()
 var _accepting_replay_ready := false
 var lobby_settings := {}
 var _lan_server: UDPServer
+var _lan_server_peers: Array[Dictionary] = []  ## retained UDP peer + last_seen
 var _lan_client: PacketPeerUDP
-var _lan_games := {}  ## address -> advertised row + last_seen
+var _lan_games := {}  ## session ID (or legacy address) -> advertised row + last_seen
 var _lan_probe_left := 0.0
+var _lan_session_id := ""
+var _host_room_code := ""
 
 
 func _ready() -> void:
@@ -63,6 +73,18 @@ func is_server() -> bool:
 	return multiplayer.multiplayer_peer != null and multiplayer.is_server()
 
 
+func is_iroh_available() -> bool:
+	return ClassDB.class_exists("IrohServer") and ClassDB.class_exists("IrohClient")
+
+
+func is_iroh_session() -> bool:
+	return active_transport == TRANSPORT_IROH
+
+
+func host_room_code() -> String:
+	return _host_room_code if is_server() and is_iroh_session() else ""
+
+
 func host_game() -> Error:
 	stop_lan_discovery()
 	var peer := ENetMultiplayerPeer.new()
@@ -70,6 +92,38 @@ func host_game() -> Error:
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
+	active_transport = TRANSPORT_ENET
+	_host_room_code = ""
+	_prepare_host_session()
+	_start_lan_advertising()
+	return OK
+
+
+func host_iroh_game() -> Error:
+	stop_lan_discovery()
+	if not is_iroh_available():
+		return ERR_UNAVAILABLE
+	var bridge = load(IROH_BRIDGE_PATH)
+	if bridge == null:
+		return ERR_CANT_OPEN
+	var peer: MultiplayerPeer = bridge.start_server()
+	if peer == null:
+		return FAILED
+	multiplayer.multiplayer_peer = peer
+	active_transport = TRANSPORT_IROH
+	_host_room_code = str(peer.call("connection_string"))
+	if not IrohRoomCode.is_valid(_host_room_code):
+		peer.close()
+		multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+		active_transport = TRANSPORT_OFFLINE
+		_host_room_code = ""
+		return FAILED
+	_prepare_host_session()
+	print("[net] iroh room code: ", _host_room_code)
+	return OK
+
+
+func _prepare_host_session() -> void:
 	players = {1: {"name": my_name, "avatar": App.selected_avatar,
 			"preference": App.selected_role_preference, "waiting": false}}
 	round_player_ids.clear()
@@ -81,16 +135,42 @@ func host_game() -> Error:
 	App.last_scores.clear()
 	App.last_winner = 0
 	players_changed.emit()
-	_start_lan_advertising()
-	return OK
 
 
 func join_game(ip: String) -> Error:
+	stop_lan_discovery()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(ip, App.PORT)
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
+	active_transport = TRANSPORT_ENET
+	_host_room_code = ""
+	_prepare_join_session()
+	return OK
+
+
+func join_iroh_game(room_code: String) -> Error:
+	stop_lan_discovery()
+	var normalized := IrohRoomCode.normalize(room_code)
+	if not IrohRoomCode.is_valid(normalized):
+		return ERR_INVALID_PARAMETER
+	if not is_iroh_available():
+		return ERR_UNAVAILABLE
+	var bridge = load(IROH_BRIDGE_PATH)
+	if bridge == null:
+		return ERR_CANT_OPEN
+	var peer: MultiplayerPeer = bridge.connect_client(normalized)
+	if peer == null:
+		return FAILED
+	multiplayer.multiplayer_peer = peer
+	active_transport = TRANSPORT_IROH
+	_host_room_code = ""
+	_prepare_join_session()
+	return OK
+
+
+func _prepare_join_session() -> void:
 	lobby_settings.clear()
 	round_player_ids.clear()
 	waiting_for_next_round = false
@@ -98,7 +178,6 @@ func join_game(ip: String) -> Error:
 	_accepting_replay_ready = false
 	App.last_scores.clear()
 	App.last_winner = 0
-	return OK
 
 
 func leave() -> void:
@@ -106,6 +185,8 @@ func leave() -> void:
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	active_transport = TRANSPORT_OFFLINE
+	_host_room_code = ""
 	players.clear()
 	lobby_settings.clear()
 	round_player_ids.clear()
@@ -125,8 +206,13 @@ func _process(delta: float) -> void:
 
 func _start_lan_advertising() -> void:
 	_stop_lan_advertising()
+	_lan_session_id = App.lobby_identity
 	_lan_server = UDPServer.new()
-	var err := _lan_server.listen(DISCOVERY_PORT)
+	_lan_server.max_pending_connections = 64
+	# Discovery is intentionally IPv4: limited broadcast and the advertised
+	# ENet addresses are IPv4. An explicit bind avoids platform-dependent
+	# dual-stack behavior that can swallow IPv4 replies.
+	var err := _lan_server.listen(DISCOVERY_PORT, "0.0.0.0")
 	if err != OK:
 		print("[net] LAN discovery advertising unavailable: ", error_string(err))
 		_lan_server = null
@@ -136,34 +222,53 @@ func _stop_lan_advertising() -> void:
 	if _lan_server != null:
 		_lan_server.stop()
 		_lan_server = null
+	_lan_server_peers.clear()
+	_lan_session_id = ""
 
 
 func _poll_lan_advertising() -> void:
 	if _lan_server == null:
 		return
-	_lan_server.poll()
+	var poll_error := _lan_server.poll()
+	if poll_error != OK:
+		print("[net] LAN discovery poll failed: ", error_string(poll_error))
+		_stop_lan_advertising()
+		return
+	var now := Time.get_ticks_msec() / 1000.0
 	while _lan_server.is_connection_available():
 		var peer := _lan_server.take_connection()
-		if peer == null or peer.get_available_packet_count() == 0:
-			continue
-		var request := peer.get_packet().get_string_from_utf8()
-		if request != DISCOVERY_REQUEST:
-			continue
-		var payload := {
-			"protocol": DISCOVERY_PROTOCOL,
-			"host": my_name,
-			"players": players.size(),
-			"capacity": 16,
-			"port": App.PORT,
-			"in_progress": App.in_match,
-		}
-		peer.put_packet(JSON.stringify(payload).to_utf8_buffer())
+		if peer != null:
+			# UDPServer routes future datagrams for this address/port to the same
+			# PacketPeerUDP. Godot requires us to retain that peer after accepting
+			# it; dropping the reference was the LAN discovery regression.
+			_lan_server_peers.append({"peer": peer, "last_seen": now})
+	var payload := JSON.stringify({
+		"protocol": DISCOVERY_PROTOCOL,
+		"session_id": _lan_session_id,
+		"host": my_name,
+		"players": players.size(),
+		"capacity": 16,
+		"port": App.PORT,
+		"in_progress": App.in_match,
+	}).to_utf8_buffer()
+	for entry: Dictionary in _lan_server_peers:
+		var peer: PacketPeerUDP = entry["peer"]
+		while peer.get_available_packet_count() > 0:
+			var request := peer.get_packet().get_string_from_utf8()
+			entry["last_seen"] = now
+			if request == DISCOVERY_REQUEST:
+				peer.put_packet(payload)
+	# Browsers keep one source port for their menu lifetime. Expiring old peers
+	# prevents an endless list after many clients have come and gone.
+	for index in range(_lan_server_peers.size() - 1, -1, -1):
+		if now - float(_lan_server_peers[index]["last_seen"]) > DISCOVERY_PEER_STALE_SECONDS:
+			_lan_server_peers.remove_at(index)
 
 
 func start_lan_discovery() -> void:
 	stop_lan_discovery()
 	_lan_client = PacketPeerUDP.new()
-	var err := _lan_client.bind(0)
+	var err := _lan_client.bind(0, "0.0.0.0")
 	if err != OK:
 		print("[net] LAN discovery unavailable: ", error_string(err))
 		_lan_client = null
@@ -198,21 +303,42 @@ func _poll_lan_discovery(delta: float) -> void:
 		var bytes := _lan_client.get_packet()
 		var address := _lan_client.get_packet_ip()
 		var parsed = JSON.parse_string(bytes.get_string_from_utf8())
-		if not parsed is Dictionary or not parsed.has("protocol"):
+		if not parsed is Dictionary or not parsed.has("protocol") or not parsed.has("port"):
 			continue
-		var row: Dictionary = parsed
+		var row: Dictionary = parsed.duplicate()
 		row["address"] = address
-		row["compatible"] = int(row["protocol"]) == DISCOVERY_PROTOCOL
+		row["compatible"] = (
+				int(row["protocol"]) == DISCOVERY_PROTOCOL
+				and int(row["port"]) == App.PORT
+		)
 		row["last_seen"] = Time.get_ticks_msec() / 1000.0
-		var is_new := not _lan_games.has(address)
-		_lan_games[address] = row
+		var session_id := str(row.get("session_id", "")).strip_edges()
+		var game_key := (
+				"session:%s" % session_id
+				if not session_id.is_empty()
+				else "%s:%d" % [address, int(row["port"])]
+		)
+		var is_new := not _lan_games.has(game_key)
+		if not is_new:
+			var previous: Dictionary = _lan_games[game_key]
+			# The loopback probe and the LAN broadcast can both find the same
+			# local host. Keep its routable LAN address instead of showing a
+			# duplicate or replacing it with 127.0.0.1.
+			if (
+					not str(previous.get("address", "")).begins_with("127.")
+					and address.begins_with("127.")
+			):
+				previous["last_seen"] = row["last_seen"]
+				changed = true
+				continue
+		_lan_games[game_key] = row
 		if is_new:
 			print("[net] discovered LAN game %s at %s" % [row.get("host", "?"), address])
 		changed = true
 	var now := Time.get_ticks_msec() / 1000.0
-	for address: String in _lan_games.keys():
-		if now - float(_lan_games[address]["last_seen"]) > DISCOVERY_STALE_SECONDS:
-			_lan_games.erase(address)
+	for game_key: String in _lan_games.keys():
+		if now - float(_lan_games[game_key]["last_seen"]) > DISCOVERY_STALE_SECONDS:
+			_lan_games.erase(game_key)
 			changed = true
 	if changed:
 		var rows := _lan_games.values()
@@ -253,8 +379,14 @@ func _on_connected_ok() -> void:
 
 
 func _on_connection_failed() -> void:
+	var message := "Could not connect to host."
+	var peer := multiplayer.multiplayer_peer
+	if active_transport == TRANSPORT_IROH and peer != null and peer.has_method("connection_error"):
+		var detail := str(peer.call("connection_error")).strip_edges()
+		if not detail.is_empty():
+			message = "Could not join that room: %s" % detail.substr(0, 160)
 	leave()
-	join_failed.emit("Could not connect to host.")
+	join_failed.emit(message)
 
 
 func _on_server_disconnected() -> void:

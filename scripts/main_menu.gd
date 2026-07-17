@@ -1,12 +1,13 @@
 extends Control
 ## Main menu: playful paint-led presentation with responsive, keyboard-friendly
-## host/join controls. Nearby LAN games remain one click away.
+## ENet/LAN and Iroh room-code controls. Nearby games remain one click away.
 
 const UITheme := preload("res://scripts/ui_theme.gd")
 const PaintBackdrop := preload("res://scripts/paint_backdrop.gd")
 
 var _name_edit: LineEdit
 var _ip_edit: LineEdit
+var _code_edit: LineEdit
 var _status: Label
 var _buttons: Array[Button] = []
 var _lan_list: VBoxContainer
@@ -148,11 +149,24 @@ func _build_join_panel(parent: HBoxContainer) -> void:
 	_name_edit.text_submitted.connect(func(_text: String) -> void: _on_host_pressed())
 	box.add_child(_name_edit)
 
-	var host_btn := _button("HOST A GAME", "PrimaryButton")
+	var host_row := HBoxContainer.new()
+	host_row.add_theme_constant_override("separation", 10)
+	box.add_child(host_row)
+	var host_btn := _button("HOST ON LAN", "PrimaryButton")
 	host_btn.name = "HostButton"
 	host_btn.custom_minimum_size.y = 52
+	host_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	host_btn.pressed.connect(_on_host_pressed)
-	box.add_child(host_btn)
+	host_row.add_child(host_btn)
+	var code_host_btn := _button("HOST BY CODE", "")
+	code_host_btn.name = "CodeHostButton"
+	code_host_btn.custom_minimum_size = Vector2(180, 52)
+	code_host_btn.pressed.connect(_on_host_iroh_pressed)
+	if not Net.is_iroh_available():
+		code_host_btn.disabled = true
+		code_host_btn.set_meta("unavailable", true)
+		code_host_btn.tooltip_text = "Iroh is not available on this platform."
+	host_row.add_child(code_host_btn)
 
 	var divider := HBoxContainer.new()
 	divider.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -162,7 +176,7 @@ func _build_join_panel(parent: HBoxContainer) -> void:
 		divider.add_child(line)
 		if i == 0:
 			var or_label := Label.new()
-			or_label.text = "OR JOIN BY ADDRESS"
+			or_label.text = "OR JOIN AN EXISTING ROOM"
 			or_label.add_theme_font_size_override("font_size", 10)
 			or_label.add_theme_color_override("font_color", UITheme.MUTED)
 			divider.add_child(or_label)
@@ -174,18 +188,39 @@ func _build_join_panel(parent: HBoxContainer) -> void:
 
 	_ip_edit = LineEdit.new()
 	_ip_edit.name = "HostAddress"
-	_ip_edit.placeholder_text = "Host IP or address"
+	_ip_edit.placeholder_text = "LAN IP or host name (ENet)"
 	_ip_edit.text = "127.0.0.1"
 	_ip_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_ip_edit.custom_minimum_size.y = 46
 	_ip_edit.text_submitted.connect(func(_text: String) -> void: _on_join_pressed())
 	join_row.add_child(_ip_edit)
 
-	var join_btn := _button("JOIN", "")
+	var join_btn := _button("JOIN IP", "")
 	join_btn.name = "JoinButton"
 	join_btn.custom_minimum_size = Vector2(122, 46)
 	join_btn.pressed.connect(_on_join_pressed)
 	join_row.add_child(join_btn)
+
+	var code_row := HBoxContainer.new()
+	code_row.add_theme_constant_override("separation", 10)
+	box.add_child(code_row)
+	_code_edit = LineEdit.new()
+	_code_edit.name = "RoomCode"
+	_code_edit.placeholder_text = "Paste an iroh room code"
+	_code_edit.max_length = 64
+	_code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_code_edit.custom_minimum_size.y = 46
+	_code_edit.text_submitted.connect(func(_text: String) -> void: _on_join_iroh_pressed())
+	code_row.add_child(_code_edit)
+	var code_join_btn := _button("JOIN CODE", "")
+	code_join_btn.name = "CodeJoinButton"
+	code_join_btn.custom_minimum_size = Vector2(122, 46)
+	code_join_btn.pressed.connect(_on_join_iroh_pressed)
+	if not Net.is_iroh_available():
+		code_join_btn.disabled = true
+		code_join_btn.set_meta("unavailable", true)
+		code_join_btn.tooltip_text = "Iroh is not available on this platform."
+	code_row.add_child(code_join_btn)
 
 	var lan_heading := Label.new()
 	lan_heading.text = "GAMES ON YOUR NETWORK"
@@ -294,7 +329,7 @@ func _update_responsive_layout() -> void:
 
 func _set_busy(busy: bool) -> void:
 	for button in _buttons:
-		button.disabled = busy
+		button.disabled = busy or bool(button.get_meta("unavailable", false))
 
 
 func _on_host_pressed() -> void:
@@ -303,6 +338,19 @@ func _on_host_pressed() -> void:
 	var err := Net.host_game()
 	if err != OK:
 		_status.text = "Could not host — is port %d already in use?" % App.PORT
+		return
+	App.goto_scene(App.LOBBY_SCENE)
+
+
+func _on_host_iroh_pressed() -> void:
+	App.play_ui_click()
+	Net.my_name = _name_edit.text.strip_edges()
+	_set_busy(true)
+	_status.text = "Creating a private room…"
+	var err := Net.host_iroh_game()
+	if err != OK:
+		_set_busy(false)
+		_status.text = "Could not create a code room (%s)." % error_string(err)
 		return
 	App.goto_scene(App.LOBBY_SCENE)
 
@@ -321,6 +369,28 @@ func _on_join_pressed() -> void:
 	if err != OK:
 		_set_busy(false)
 		_status.text = "That address isn't valid."
+
+
+func _on_join_iroh_pressed() -> void:
+	Net.stop_lan_discovery()
+	App.play_ui_click()
+	Net.my_name = _name_edit.text.strip_edges()
+	var room_code := _code_edit.text.strip_edges()
+	if room_code.is_empty():
+		_status.text = "Paste the host's room code first."
+		Net.start_lan_discovery()
+		return
+	_set_busy(true)
+	_status.text = "Joining code room…"
+	var err := Net.join_iroh_game(room_code)
+	if err != OK:
+		_set_busy(false)
+		_status.text = (
+				"That room code isn't valid."
+				if err == ERR_INVALID_PARAMETER
+				else "Could not start iroh (%s)." % error_string(err)
+		)
+		Net.start_lan_discovery()
 
 
 func _on_joined_ok() -> void:
@@ -375,7 +445,12 @@ func _on_quit_pressed() -> void:
 func _handle_cli() -> void:
 	if App.cli.has("name"):
 		_name_edit.text = str(App.cli["name"])
-	if App.cli.has("host"):
+	if App.cli.has("host-code"):
+		_on_host_iroh_pressed.call_deferred()
+	elif App.cli.has("join-code"):
+		_code_edit.text = str(App.cli["join-code"])
+		_on_join_iroh_pressed.call_deferred()
+	elif App.cli.has("host"):
 		_on_host_pressed.call_deferred()
 	elif App.cli.has("join"):
 		_ip_edit.text = str(App.cli["join"])

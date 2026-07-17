@@ -67,17 +67,42 @@ func _build_ui() -> void:
 
 	var ip_hint := Label.new()
 	if Net.is_server():
-		var lan_ip := LANAddress.preferred(IP.get_local_addresses())
-		ip_hint.text = (
-				"Friends can join at %s" % lan_ip
-				if not lan_ip.is_empty()
-				else "Could not find a LAN IP")
+		if Net.is_iroh_session():
+			ip_hint.text = "Share this private room code with the other players"
+		else:
+			var lan_ip := LANAddress.preferred(IP.get_local_addresses())
+			ip_hint.text = (
+					"Friends can join at %s" % lan_ip
+					if not lan_ip.is_empty()
+					else "Could not find a LAN IP")
 	else:
-		ip_hint.text = "Connected to host"
+		ip_hint.text = (
+				"Connected through iroh"
+				if Net.is_iroh_session()
+				else "Connected to host"
+		)
 	ip_hint.add_theme_font_size_override("font_size", 13)
 	ip_hint.add_theme_color_override("font_color", UITheme.MUTED)
 	ip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(ip_hint)
+	if Net.is_server() and Net.is_iroh_session():
+		var code_row := HBoxContainer.new()
+		code_row.add_theme_constant_override("separation", 8)
+		box.add_child(code_row)
+		var code_field := LineEdit.new()
+		code_field.name = "HostRoomCode"
+		code_field.text = Net.host_room_code()
+		code_field.editable = false
+		code_field.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		code_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		code_row.add_child(code_field)
+		var copy_button := Button.new()
+		copy_button.name = "CopyRoomCode"
+		copy_button.text = "COPY CODE"
+		copy_button.pressed.connect(func() -> void:
+			DisplayServer.clipboard_set(Net.host_room_code())
+			copy_button.text = "COPIED")
+		code_row.add_child(copy_button)
 
 	var panel := PanelContainer.new()
 	box.add_child(panel)

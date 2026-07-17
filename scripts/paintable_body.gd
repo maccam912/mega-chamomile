@@ -216,6 +216,52 @@ func capture_pose() -> Array[Transform3D]:
 	return pose
 
 
+## Rigid bodies never carry authored scale, so seven float32 values (position
+## plus quaternion) preserve the complete network pose. This avoids the Variant
+## overhead of an Array[Transform3D] and keeps every avatar below iroh's
+## unreliable datagram limit.
+func capture_network_pose() -> PackedFloat32Array:
+	var packed := PackedFloat32Array()
+	packed.resize(part_bodies.size() * 7)
+	for index in part_bodies.size():
+		var transform := (
+				part_bodies[index].global_transform
+				if is_inside_tree()
+				else part_bodies[index].transform
+		)
+		var rotation := transform.basis.get_rotation_quaternion().normalized()
+		var offset := index * 7
+		packed[offset] = transform.origin.x
+		packed[offset + 1] = transform.origin.y
+		packed[offset + 2] = transform.origin.z
+		packed[offset + 3] = rotation.x
+		packed[offset + 4] = rotation.y
+		packed[offset + 5] = rotation.z
+		packed[offset + 6] = rotation.w
+	return packed
+
+
+func decode_network_pose(packed: PackedFloat32Array) -> Array[Transform3D]:
+	var pose: Array[Transform3D] = []
+	if packed.size() != part_bodies.size() * 7:
+		return pose
+	for index in part_bodies.size():
+		var offset := index * 7
+		var rotation := Quaternion(packed[offset + 3], packed[offset + 4],
+				packed[offset + 5], packed[offset + 6])
+		if rotation.length_squared() < 0.0001:
+			return []
+		var origin := Vector3(packed[offset], packed[offset + 1], packed[offset + 2])
+		pose.append(Transform3D(Basis(rotation.normalized()), origin))
+	return pose
+
+
+func set_remote_network_pose(packed: PackedFloat32Array) -> void:
+	var pose := decode_network_pose(packed)
+	if not pose.is_empty():
+		set_remote_pose(pose)
+
+
 func center_of_mass_global() -> Vector3:
 	if part_bodies.is_empty():
 		return global_position

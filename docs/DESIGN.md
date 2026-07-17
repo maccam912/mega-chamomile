@@ -75,8 +75,11 @@ MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
 
 ## Multiplayer model
 
-- Godot high-level multiplayer, **ENet**, listen server (host = server+player).
-  Join by IP:port (LAN / port-forward for now; lobby service is future work).
+- Godot high-level multiplayer with a listen server (host = server+player) and
+  two selectable transports. **ENet** supports automatic LAN discovery and
+  manual IP joining; **godot-iroh** supports a self-contained endpoint code,
+  encrypted QUIC, NAT traversal, and relay fallback without port forwarding.
+  ENet remains the default and works independently of iroh availability.
 - `Net.gd` autoload: host/join, `players: {peer_id: {name, role, ...}}`
   registry replicated via reliable RPCs, connection/disconnection signals.
 - The server snapshots `round_player_ids` when loading a round. Scene barriers,
@@ -103,7 +106,7 @@ match plays out in a headless unit test:
 
 ```
 autoload/Game.gd        # scene transitions + app state (current match settings)
-autoload/Net.gd         # ENet host/join + player registry + signals
+autoload/Net.gd         # ENet/Iroh choice + LAN discovery + registry/signals
 scripts/match_state.gd  # PURE match rules (testable headless)
 scripts/session_state.gd # replay totals, role rotation, and role skill ratings
 scripts/player.gd       # CharacterBody3D: move, camera, paint, shoot
@@ -159,4 +162,5 @@ docs/DESIGN.md, PROGRESS.md
 - Vertex-paint resolution is chunky (by design, blocky aesthetic) — texture
   painting is the quality upgrade later.
 - Ragdoll provides a natural lying pose; authored poses/emotes are still future work.
-- Lobby is IP-based; no matchmaking/party codes yet.
+- Iroh uses a self-contained 43-character endpoint code; a friendly short-code
+  rendezvous service and public matchmaking are still future work.

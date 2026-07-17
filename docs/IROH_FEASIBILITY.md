@@ -1,7 +1,23 @@
 # Iroh transport feasibility
 
-Research snapshot: 2026-07-16. This is an engineering recommendation, not an
-implemented transport.
+Research snapshot: 2026-07-16. Integration baseline implemented the same day;
+production hardening and external-network QA remain.
+
+## Implementation status
+
+Iroh is now a second transport rather than an ENet replacement. The main menu
+offers **Host on LAN** / manual IP through ENet and separate **Host by Code** /
+**Join Code** actions through godot-iroh. Hosts can copy the self-contained
+43-character endpoint code from the lobby. Both transports feed the same Godot
+high-level multiplayer API, registry, authoritative match flow, and RPCs.
+
+The project vendors godot-iroh v0.1.5 desktop binaries with version, upstream
+commit, archive checksum, and MIT license recorded under `addons/godot_iroh/`.
+A local two-process iroh run completed lobby registration and a full fast match.
+The three avatar ragdoll snapshots now use compact float32 position/quaternion
+arrays (380–548 serialized bytes in regression tests), leaving headroom below
+the addon's 1,024-byte unreliable-packet ceiling. LAN discovery remains fully
+independent and has its own repeated-refresh integration smoke.
 
 ## Verdict
 
@@ -13,10 +29,10 @@ addon already implements Godot's `MultiplayerPeerExtension`. It exposes
 This avoids building the transport adapter from scratch and materially reduces
 the likely migration to a small integration spike plus production hardening.
 
-Do not tunnel ENet through iroh: that would stack ENet reliability on QUIC,
-complicate peer addressing, and retain two transport state machines. Replace
-`ENetMultiplayerPeer` with Godot Iroh behind a transport selection boundary so
-ENet remains available during evaluation.
+The implementation does not tunnel ENet through iroh, which would stack ENet
+reliability on QUIC, complicate peer addressing, and retain two transport state
+machines. A transport-selection boundary installs either
+`ENetMultiplayerPeer` or Godot Iroh for the session, so ENet remains available.
 
 ## Why it is promising
 
@@ -40,29 +56,28 @@ ENet remains available during evaluation.
 The addon covers the adapter work, but it should be treated as source we may
 need to maintain rather than an opaque binary dependency:
 
-1. The latest packaged release is `0.1.5` from May 2025, while the current main
-   branch has continued changing without a new release. Build from a pinned
-   commit rather than silently depending on the Asset Library binary.
+1. The pinned packaged release is `0.1.5` from May 2025, while the current main
+   branch has continued changing without a new release. Its exact source commit
+   and archive checksum are recorded, but a reviewed iroh 1.x upgrade remains.
 2. Main currently pins iroh `0.96.0`; current iroh is 1.0.x, and an iroh 1.0
    update exists only as a large draft pull request. The 0.96 release also had
    NAT path-recovery regressions later addressed by iroh, so production should
    use a reviewed minimal 1.0.x update.
 3. The addon reports roughly 1,024 bytes as the maximum unreliable packet size.
-   Paint-n-Seek's `unreliable_ordered` ragdoll pose snapshot may exceed that and
-   must be measured. If it does, compress/split the pose rather than silently
-   losing it.
+   Compact ragdoll snapshots are now regression-tested below 550 bytes before
+   RPC framing; packet-loss and relay-path stress still need testing.
 4. Audit target-peer behavior. The current negative-target branch appears to
    compare a positive connected peer ID with the negative selector instead of
    its absolute value, which would fail to exclude the requested peer.
-5. Compile and package native libraries for every supported desktop target and
-   cover reconnects, relay-to-direct path changes, packet loss, late joins, and
-   host shutdown in integration tests. Upstream lists Windows, macOS, Linux,
-   and Android support, but not Web.
+5. Desktop libraries are packaged for Windows x86_64, Linux x86_64, and
+   universal macOS. Hardware-test those exports and cover reconnects,
+   relay-to-direct path changes, packet loss, three clients, late joins, and
+   host shutdown. Web remains unsupported upstream.
 
 ## Product and operations changes
 
-- Replace the manual IP field with a host ticket/room-code field. LAN discovery
-  can advertise the same ticket, so local one-click joining remains possible.
+- Keep the manual IP and LAN list for ENet, with the room-code field alongside
+  them as a second path. This preserves offline/local play when iroh is absent.
 - Persist the host's endpoint secret if stable host identity is desirable;
   otherwise generate an ephemeral identity per hosted session.
 - Add application-level admission checks. Iroh authenticates endpoint IDs, but
@@ -72,22 +87,20 @@ need to maintain rather than an opaque binary dependency:
   no SLA. A production release should budget for managed relays or operate at
   least two self-hosted relays.
 
-## Suggested spike
+## Completed spike and go/no-go gate
 
-Keep ENet as the default while testing one narrow vertical slice:
+The narrow local vertical slice is complete while ENet remains the default:
 
-1. Vendor Godot Iroh from a pinned upstream commit and add an ENet/Iroh
-   transport switch in `Net.gd`.
-2. Replace the IP field with a connection-string field in iroh mode. Put the
-   same connection string in the existing LAN advertisement.
-3. Run the existing lobby registry and reliable RPCs unchanged with one host
-   and one guest on separate internet connections.
-4. Measure serialized movement and ragdoll RPC sizes, then validate
-   `unreliable_ordered` behavior under loss and relay fallback.
+1. Done: vendor pinned desktop runtimes and add the ENet/Iroh boundary.
+2. Done: add code hosting/joining alongside the retained IP and LAN UI.
+3. Done locally: run the existing lobby, match, and RPC flow with a host and
+   guest. Separate-internet-connection testing remains.
+4. Partly done: serialized ragdoll RPC payloads are budgeted; loss and relay
+   fallback validation remains.
 5. Patch the negative-target issue if confirmed and test server broadcasts with
    three clients, including a late join and a disconnect.
-6. Build pinned macOS, Windows, and Linux libraries before changing the default
-   transport. Separately port the addon to a reviewed iroh 1.0.x baseline.
+6. Packaged: pinned macOS, Windows, and Linux libraries are included. Keep ENet
+   as the default and separately port to a reviewed iroh 1.x baseline.
 
 The go/no-go gate is a three-client internet test in which a player behind a
 restrictive NAT can join via relay fallback, movement remains smooth, and a

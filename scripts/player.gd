@@ -353,7 +353,7 @@ func _physics_process(delta: float) -> void:
 		if _sync_timer >= SYNC_INTERVAL:
 			_sync_timer = 0.0
 			look_dir = -_camera.global_transform.basis.z
-			var pose: Array = body.capture_pose() if ragdolled else []
+			var pose := body.capture_network_pose() if ragdolled else PackedFloat32Array()
 			rpc(&"sync_state", position, rotation.y, look_dir,
 					Input.is_action_pressed("crouch") and not ragdolled, ragdolled, pose)
 	else:
@@ -771,7 +771,7 @@ func brush_cursor_px(screen_point: Vector2) -> float:
 
 @rpc("authority", "call_remote", "unreliable_ordered")
 func sync_state(pos: Vector3, yaw: float, look: Vector3, crouching: bool,
-		rigidbody_active: bool, ragdoll_pose: Array) -> void:
+		rigidbody_active: bool, ragdoll_pose: PackedFloat32Array) -> void:
 	_target_pos = pos
 	_target_yaw = yaw
 	look_dir = look
@@ -779,7 +779,7 @@ func sync_state(pos: Vector3, yaw: float, look: Vector3, crouching: bool,
 	if ragdolled != rigidbody_active:
 		set_ragdoll(rigidbody_active)
 	if rigidbody_active:
-		body.set_remote_pose(ragdoll_pose)
+		body.set_remote_network_pose(ragdoll_pose)
 
 
 @rpc("authority", "call_local", "reliable")
