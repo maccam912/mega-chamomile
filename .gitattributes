@@ -28,6 +28,9 @@
 *.webm filter=lfs diff=lfs merge=lfs -text
 *.ogv filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
+# README media stays in plain git (not LFS) so GitHub always renders it and
+# README views don't eat LFS bandwidth quota.
+docs/media/* -filter -diff -merge -text
 *.dll filter=lfs diff=lfs merge=lfs -text
 *.dylib filter=lfs diff=lfs merge=lfs -text
 *.so filter=lfs diff=lfs merge=lfs -text
