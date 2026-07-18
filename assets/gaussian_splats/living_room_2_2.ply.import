@@ -1,0 +1,15 @@
+[remap]
+
+importer="gaussian.splat.importer"
+importer_version=5
+type="Resource"
+uid="uid://sdblanmlbpgj"
+path="res://.godot/imported/living_room_2_2.ply-2f33162ff2f664dc877aca199bc1adb3.res"
+
+[deps]
+
+source_file="res://assets/gaussian_splats/living_room_2_2.ply"
+dest_files=["res://.godot/imported/living_room_2_2.ply-2f33162ff2f664dc877aca199bc1adb3.res"]
+
+[params]
+

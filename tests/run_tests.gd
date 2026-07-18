@@ -1062,6 +1062,14 @@ func test_map_selection() -> void:
 						concave_collision_count += 1
 			check(concave_collision_count == 13,
 					"Hallwyl Museum has 13 generated concave collision meshes")
+		if map_id == "living_room_splat":
+			var splat := instance.get_node_or_null("GaussianSplat") as Node3D
+			check(splat != null,
+					"Living Room map includes its Gaussian splat node")
+			check(splat != null and splat.scale.is_equal_approx(Vector3.ONE * 4.0),
+					"Living Room splat uses 1:4 dollhouse-scale room proportions")
+			check(instance.get_node_or_null("Floor/Collision") != null,
+					"Living Room map includes a simple walkable floor")
 		instance.free()
 	app.select_map("not-a-map")
 	check(app.settings["map_id"] == app.DEFAULT_MAP_ID, "unknown map falls back safely")

@@ -20,6 +20,10 @@ const MAPS := {
 		"label": "Hallwyl Museum",
 		"scene": "res://maps/hallwyl_museum.tscn",
 	},
+	"living_room_splat": {
+		"label": "Luma Living Room (Gaussian Splat)",
+		"scene": "res://maps/living_room_splat.tscn",
+	},
 }
 
 ## Host-configured match settings. The host validates and replicates an

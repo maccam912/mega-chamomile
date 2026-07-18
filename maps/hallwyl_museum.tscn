@@ -16,6 +16,7 @@ reflected_light_source = 2
 size = Vector3(4.33, 2.85, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_jpqgc"]
+size = Vector3(31.45, 1, 55.93)
 
 [node name="HallwylMuseum" type="Node3D" unique_id=983145329]
 script = ExtResource("1_script")
@@ -53,5 +54,5 @@ shape = SubResource("BoxShape3D_phgtk")
 [node name="StaticBody3D2" type="StaticBody3D" parent="." unique_id=269989334]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D2" unique_id=799416999]
-transform = Transform3D(31.15975, 0, 0, 0, 1, 0, 0, 0, 49.31622, 0, 10.35511, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.35511, 0)
 shape = SubResource("BoxShape3D_jpqgc")
