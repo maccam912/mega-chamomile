@@ -46,9 +46,14 @@ func _initialize() -> void:
 	var source_up := SOURCE_FLOOR_NORMAL.normalized()
 	var level_rotation := Quaternion(
 			source_up.cross(Vector3.UP).normalized(), source_up.angle_to(Vector3.UP))
-	model.quaternion = level_rotation
-	model.scale = Vector3.ONE * ROOM_SCALE
-	model.position = -(level_rotation * (SOURCE_ROOM_CENTER * ROOM_SCALE))
+	var level_basis := Basis(level_rotation).scaled(Vector3.ONE * ROOM_SCALE)
+	# The reconstruction's interior lies below its floor plane. Reflect the
+	# already-leveled model through that plane so players stand inside the room
+	# rather than on its exterior shell.
+	var vertical_flip := Basis.from_scale(Vector3(1, -1, 1))
+	var model_basis := vertical_flip * level_basis
+	model.transform = Transform3D(
+			model_basis, -(model_basis * SOURCE_ROOM_CENTER))
 	root.add_child(model)
 	model.owner = root
 

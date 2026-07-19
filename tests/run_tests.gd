@@ -1066,6 +1066,9 @@ func test_map_selection() -> void:
 			var room := instance.get_node_or_null("Room") as StaticBody3D
 			check(room != null and is_equal_approx(float(room.get_meta("room_scale", 0.0)), 250.0),
 					"Violets Room is scaled for quarter-size doll play")
+			var room_model := room.get_node_or_null("Model") as Node3D if room != null else null
+			check(room_model != null and room_model.basis.determinant() < 0.0,
+					"Violets Room is vertically mirrored so its interior faces upward")
 			var room_collision := room.get_node_or_null("Collision1") as CollisionShape3D \
 					if room != null else null
 			check(room_collision != null and room_collision.shape is ConcavePolygonShape3D,
