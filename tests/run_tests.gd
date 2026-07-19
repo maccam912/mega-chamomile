@@ -1062,14 +1062,17 @@ func test_map_selection() -> void:
 						concave_collision_count += 1
 			check(concave_collision_count == 13,
 					"Hallwyl Museum has 13 generated concave collision meshes")
-		if map_id == "living_room_splat":
-			var splat := instance.get_node_or_null("GaussianSplat") as Node3D
-			check(splat != null,
-					"Living Room map includes its Gaussian splat node")
-			check(splat != null and splat.scale.is_equal_approx(Vector3.ONE * 4.0),
-					"Living Room splat uses 1:4 dollhouse-scale room proportions")
-			check(instance.get_node_or_null("Floor/Collision") != null,
-					"Living Room map includes a simple walkable floor")
+		if map_id == "violets_room":
+			var room := instance.get_node_or_null("Room") as StaticBody3D
+			check(room != null and is_equal_approx(float(room.get_meta("room_scale", 0.0)), 250.0),
+					"Violets Room is scaled for quarter-size doll play")
+			var room_collision := room.get_node_or_null("Collision1") as CollisionShape3D \
+					if room != null else null
+			check(room_collision != null and room_collision.shape is ConcavePolygonShape3D,
+					"Violets Room includes generated concave collision")
+			if room_collision != null and room_collision.shape is ConcavePolygonShape3D:
+				check((room_collision.shape as ConcavePolygonShape3D).backface_collision,
+						"Violets Room collision supports inconsistent photogrammetry winding")
 		instance.free()
 	app.select_map("not-a-map")
 	check(app.settings["map_id"] == app.DEFAULT_MAP_ID, "unknown map falls back safely")

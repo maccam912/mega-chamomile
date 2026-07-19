@@ -2,9 +2,9 @@
 
 Multiplayer hide-and-seek where you hide by painting yourself to match whatever
 you're standing in front of. It's basically a clone of MECCHA CHAMELEON, with
-one difference: most of its art is deliberately simple and blocky. This branch
-uses Godot 4.7's Forward+ renderer so it can also preview Gaussian-splat maps;
-those maps require a desktop GPU with compute-shader support.
+one difference: most of its art is deliberately simple and blocky. The game
+uses Godot 4.7's Compatibility renderer so it runs on a wider range of target
+hardware.
 
 ![A hider painted to match a carved wooden archway](docs/media/hider-blended.jpg)
 
@@ -49,16 +49,6 @@ The museum map is a real photogrammetry scan of the
 [Hallwyl Museum](https://sketchfab.com/3d-models/the-hallwyl-museum-1st-floor-combined-f74eefe9f1cd4a2795a689451e723ee9)
 in Stockholm, which turns out to be full of wood paneling, tapestries, and
 suits of armor that are extremely good to hide against.
-
-The experimental **Luma Living Room (Gaussian Splat)** map renders the supplied
-1.2-million-point Luma AI capture through the bundled GDGS 3.1.0 add-on. It has
-only a flat walkable collider under the scanned floor for now: the captured
-walls and furniture are visual, not physical. The capture is enlarged 4× for a
-dollhouse-scale player-to-room proportion.
-
-The first editor open imports the 67 MB compressed source PLY and can take about a minute;
-the generated cache under `.godot/imported` is roughly 535 MB. The source PLY is
-tracked with Git LFS.
 
 Between rounds the game quietly balances things. Each player has separate
 hiding and seeking ratings for the session, and on replay the struggling
