@@ -206,8 +206,8 @@ func _build_join_panel(parent: HBoxContainer) -> void:
 	box.add_child(code_row)
 	_code_edit = LineEdit.new()
 	_code_edit.name = "RoomCode"
-	_code_edit.placeholder_text = "Paste an iroh room code"
-	_code_edit.max_length = 64
+	_code_edit.placeholder_text = "Enter the 4-character room code"
+	_code_edit.max_length = 4
 	_code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_code_edit.custom_minimum_size.y = 46
 	_code_edit.text_submitted.connect(func(_text: String) -> void: _on_join_iroh_pressed())
@@ -347,10 +347,15 @@ func _on_host_iroh_pressed() -> void:
 	Net.my_name = _name_edit.text.strip_edges()
 	_set_busy(true)
 	_status.text = "Creating a private room…"
-	var err := Net.host_iroh_game()
+	var err: Error = await Net.host_iroh_game()
 	if err != OK:
 		_set_busy(false)
-		_status.text = "Could not create a code room (%s)." % error_string(err)
+		_status.text = (
+				Net.last_iroh_error()
+				if not Net.last_iroh_error().is_empty()
+				else "Could not create a code room (%s)." % error_string(err)
+		)
+		Net.start_lan_discovery()
 		return
 	App.goto_scene(App.LOBBY_SCENE)
 
@@ -377,17 +382,19 @@ func _on_join_iroh_pressed() -> void:
 	Net.my_name = _name_edit.text.strip_edges()
 	var room_code := _code_edit.text.strip_edges()
 	if room_code.is_empty():
-		_status.text = "Paste the host's room code first."
+		_status.text = "Enter the host's 4-character room code first."
 		Net.start_lan_discovery()
 		return
 	_set_busy(true)
 	_status.text = "Joining code room…"
-	var err := Net.join_iroh_game(room_code)
+	var err: Error = await Net.join_iroh_game(room_code)
 	if err != OK:
 		_set_busy(false)
 		_status.text = (
-				"That room code isn't valid."
+				"Room codes contain four letters or numbers."
 				if err == ERR_INVALID_PARAMETER
+				else Net.last_iroh_error()
+				if not Net.last_iroh_error().is_empty()
 				else "Could not start iroh (%s)." % error_string(err)
 		)
 		Net.start_lan_discovery()

@@ -22,9 +22,10 @@ requests. It is planning documentation; items are unimplemented unless marked
   of current scene barriers.
 - `NET-02` **IMPLEMENTED — internet/cross-platform QA pending**: ENet remains
   the default LAN/IP protocol, while a separately selected godot-iroh peer can
-  host and join through a shareable endpoint code. Desktop runtimes are pinned
-  and packaged, the same RPC game loop completes end to end over iroh, and
-  compact ragdoll packets stay within its unreliable datagram budget.
+  host and join through a shareable four-character rendezvous code. Desktop
+  runtimes are pinned and packaged, the same RPC game loop completes end to end
+  over iroh, and compact ragdoll packets stay within its unreliable datagram
+  budget.
 - `REVEAL-01` **SHIPPED**: survivor poses and paint remain intact in RESULTS,
   frozen ragdolls cannot be pushed, high-contrast markers reveal survivors,
   and Tab switches between the scoreboard and read-only scene inspection.
@@ -667,7 +668,9 @@ show that voice chat makes it exploitable.
 
 **Implemented baseline:** The game now uses the
 [Iroh networking stack](https://docs.iroh.computer/what-is-iroh) so players
-can connect by a shareable endpoint code instead of exchanging IP addresses.
+can connect by a shareable four-character code instead of exchanging IP
+addresses. The client registers and resolves the underlying endpoint IDs with
+`iroh-rendezvous.maccam912.workers.dev`.
 This is a second, explicitly selected `MultiplayerPeer`; the existing ENet LAN,
 automatic discovery, and manual-IP flow remain independent and available.
 
@@ -678,6 +681,11 @@ Completed in the integration:
 - **Host by Code**, **Join Code**, lobby display/copy, validation, CLI helpers,
   transport-specific errors, and graceful platform availability checks are in
   place.
+- Hosting registers the iroh endpoint ID with the rendezvous Worker, joining
+  resolves the short code before connecting, and leaving revokes the mapping.
+- During a match, the iroh host can rotate an expired code from the escape menu;
+  successful replacements are copied automatically for sharing with late
+  joiners, while a failed refresh leaves the previous code unchanged.
 - The normal lobby registry, settings, match load, reliable RPCs, gameplay
   phases, scoring, disconnects, and late-join architecture are shared by both
   transports. A two-player iroh smoke completed a full fast round.
@@ -694,9 +702,8 @@ Remaining hardening goals:
   representative round.
 - Test direct connections, NAT traversal, network changes, and relay fallback;
   record latency, bandwidth, reconnection behavior, and failure messages.
-- Optionally add a rendezvous service for friendlier short codes; the current
-  43-character endpoint code is self-contained and needs no game-operated
-  lookup service.
+- Exercise rendezvous expiry, revocation, outage handling, rate limits, and
+  abuse controls under packaged-client load.
 - Evaluate export size, supported platforms, Rust/native build maintenance,
   relay hosting and operating cost, service availability, abuse controls, and
   security implications.

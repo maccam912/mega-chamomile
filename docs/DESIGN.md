@@ -77,9 +77,10 @@ MECCHA CHAMELEON (Steam, 2026). You stay in your chosen Human, Cat, or Dog body
 
 - Godot high-level multiplayer with a listen server (host = server+player) and
   two selectable transports. **ENet** supports automatic LAN discovery and
-  manual IP joining; **godot-iroh** supports a self-contained endpoint code,
-  encrypted QUIC, NAT traversal, and relay fallback without port forwarding.
-  ENet remains the default and works independently of iroh availability.
+  manual IP joining; **godot-iroh** supports encrypted QUIC, NAT traversal,
+  and relay fallback without port forwarding. A small rendezvous Worker maps
+  four-character room codes to the underlying iroh endpoint IDs. ENet remains
+  the default and works independently of iroh or rendezvous availability.
 - `Net.gd` autoload: host/join, `players: {peer_id: {name, role, ...}}`
   registry replicated via reliable RPCs, connection/disconnection signals.
 - The server snapshots `round_player_ids` when loading a round. Scene barriers,
@@ -162,5 +163,7 @@ docs/DESIGN.md, PROGRESS.md
 - Vertex-paint resolution is chunky (by design, blocky aesthetic) — texture
   painting is the quality upgrade later.
 - Ragdoll provides a natural lying pose; authored poses/emotes are still future work.
-- Iroh uses a self-contained 43-character endpoint code; a friendly short-code
-  rendezvous service and public matchmaking are still future work.
+- Iroh room codes depend on `iroh-rendezvous.maccam912.workers.dev`; mappings
+  are temporary. An iroh host can rotate the mapping from the in-match escape
+  menu for late joiners, and the host revokes its current mapping when leaving.
+  Public matchmaking is still future work.

@@ -89,9 +89,13 @@ Two ways to connect:
 
 - **Same network:** one person clicks Host on LAN. The game shows up
   automatically on everyone else's main menu. Joining by IP also works.
-- **Over the internet:** the host clicks Host by Code and sends the short code
-  to the others. This uses an encrypted [iroh](https://iroh.computer) tunnel,
-  so there's no port forwarding or IP-address-reading-over-the-phone involved.
+- **Over the internet:** the host clicks Host by Code and sends the
+  four-character code to the others. This uses an encrypted
+  [iroh](https://iroh.computer) tunnel, so there's no port forwarding or
+  IP-address-reading-over-the-phone involved.
+
+Iroh codes are temporary. During a match, the host can press Esc and choose
+**Generate New Code** for a late joiner; the fresh code is copied automatically.
 
 The host can tweak phase timers, seeker count, ammo (fixed or per-hider),
 scoring values, and the map. Guests see the full settings before the match

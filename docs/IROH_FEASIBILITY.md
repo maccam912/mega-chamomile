@@ -7,9 +7,11 @@ production hardening and external-network QA remain.
 
 Iroh is now a second transport rather than an ENet replacement. The main menu
 offers **Host on LAN** / manual IP through ENet and separate **Host by Code** /
-**Join Code** actions through godot-iroh. Hosts can copy the self-contained
-43-character endpoint code from the lobby. Both transports feed the same Godot
-high-level multiplayer API, registry, authoritative match flow, and RPCs.
+**Join Code** actions through godot-iroh. Hosts register their endpoint ID with
+`iroh-rendezvous.maccam912.workers.dev` and copy the resulting four-character
+code from the lobby; joining clients resolve that code before connecting. Both
+transports feed the same Godot high-level multiplayer API, registry,
+authoritative match flow, and RPCs.
 
 The project vendors godot-iroh v0.1.5 desktop binaries with version, upstream
 commit, archive checksum, and MIT license recorded under `addons/godot_iroh/`.
@@ -78,6 +80,10 @@ need to maintain rather than an opaque binary dependency:
 
 - Keep the manual IP and LAN list for ENet, with the room-code field alongside
   them as a second path. This preserves offline/local play when iroh is absent.
+- Treat the rendezvous Worker as an online dependency for iroh rooms. Codes are
+  temporary, the client reports lookup/service failures, and hosts revoke their
+  mapping when leaving. Hosts can rotate and copy the mapping from the in-match
+  escape menu so late joiners are not blocked by the original code expiring.
 - Persist the host's endpoint secret if stable host identity is desirable;
   otherwise generate an ephemeral identity per hosted session.
 - Add application-level admission checks. Iroh authenticates endpoint IDs, but

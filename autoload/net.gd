@@ -31,6 +31,9 @@ const IROH_BRIDGE_PATH := "res://scripts/iroh_bridge.gd"
 const TRANSPORT_OFFLINE := "offline"
 const TRANSPORT_ENET := "enet"
 const TRANSPORT_IROH := "iroh"
+const IROH_RENDEZVOUS_URL := "https://iroh-rendezvous.maccam912.workers.dev"
+const IROH_JOIN_CODES_PATH := "/v1/join-codes"
+const IROH_ENDPOINT_ID_LENGTH := 43
 const DISCOVERY_PORT := 24566
 const DISCOVERY_REQUEST := "PAINT_N_SEEK_DISCOVER_V1"
 const DISCOVERY_PROTOCOL := 1
@@ -58,6 +61,9 @@ var _lan_games := {}  ## session ID (or legacy address) -> advertised row + last
 var _lan_probe_left := 0.0
 var _lan_session_id := ""
 var _host_room_code := ""
+var _host_room_revoke_token := ""
+var _host_iroh_endpoint_id := ""
+var _last_iroh_error := ""
 
 
 func _ready() -> void:
@@ -85,6 +91,10 @@ func host_room_code() -> String:
 	return _host_room_code if is_server() and is_iroh_session() else ""
 
 
+func last_iroh_error() -> String:
+	return _last_iroh_error
+
+
 func host_game() -> Error:
 	stop_lan_discovery()
 	var peer := ENetMultiplayerPeer.new()
@@ -94,6 +104,8 @@ func host_game() -> Error:
 	multiplayer.multiplayer_peer = peer
 	active_transport = TRANSPORT_ENET
 	_host_room_code = ""
+	_host_room_revoke_token = ""
+	_host_iroh_endpoint_id = ""
 	_prepare_host_session()
 	_start_lan_advertising()
 	return OK
@@ -101,6 +113,7 @@ func host_game() -> Error:
 
 func host_iroh_game() -> Error:
 	stop_lan_discovery()
+	_last_iroh_error = ""
 	if not is_iroh_available():
 		return ERR_UNAVAILABLE
 	var bridge = load(IROH_BRIDGE_PATH)
@@ -109,17 +122,57 @@ func host_iroh_game() -> Error:
 	var peer: MultiplayerPeer = bridge.start_server()
 	if peer == null:
 		return FAILED
+	var endpoint_id := str(peer.call("connection_string"))
+	if not _is_valid_iroh_endpoint_id(endpoint_id):
+		peer.close()
+		_last_iroh_error = "Iroh returned an invalid endpoint ID."
+		return FAILED
+	var registration := await _register_iroh_endpoint(endpoint_id)
+	if registration["error"] != OK:
+		peer.close()
+		_last_iroh_error = str(registration["message"])
+		return registration["error"]
 	multiplayer.multiplayer_peer = peer
 	active_transport = TRANSPORT_IROH
-	_host_room_code = str(peer.call("connection_string"))
-	if not IrohRoomCode.is_valid(_host_room_code):
-		peer.close()
-		multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-		active_transport = TRANSPORT_OFFLINE
-		_host_room_code = ""
-		return FAILED
+	_host_room_code = registration["code"]
+	_host_room_revoke_token = registration["revoke_token"]
+	_host_iroh_endpoint_id = endpoint_id
 	_prepare_host_session()
-	print("[net] iroh room code: ", _host_room_code)
+	print("[net] iroh short room code: ", _host_room_code)
+	return OK
+
+
+func regenerate_iroh_room_code() -> Error:
+	_last_iroh_error = ""
+	if not is_server() or not is_iroh_session():
+		_last_iroh_error = "Only the iroh host can generate a room code."
+		return ERR_UNAUTHORIZED
+	var peer := multiplayer.multiplayer_peer
+	var endpoint_id := _host_iroh_endpoint_id
+	if not _is_valid_iroh_endpoint_id(endpoint_id) and peer.has_method("connection_string"):
+		endpoint_id = str(peer.call("connection_string"))
+	if not _is_valid_iroh_endpoint_id(endpoint_id):
+		_last_iroh_error = "Could not read this host's iroh endpoint ID."
+		return ERR_INVALID_DATA
+	var registration := await _register_iroh_endpoint(endpoint_id)
+	if registration["error"] != OK:
+		_last_iroh_error = str(registration["message"])
+		return registration["error"]
+	# The host may have left while the HTTPS request was in flight. Revoke the
+	# unused mapping instead of publishing it for a session that no longer exists.
+	if not is_server() or not is_iroh_session() or multiplayer.multiplayer_peer != peer:
+		_revoke_iroh_room_code(registration["code"], registration["revoke_token"])
+		_last_iroh_error = "The room closed before the new code was ready."
+		return ERR_BUSY
+	var old_code := _host_room_code
+	var old_revoke_token := _host_room_revoke_token
+	_host_room_code = registration["code"]
+	_host_room_revoke_token = registration["revoke_token"]
+	_host_iroh_endpoint_id = endpoint_id
+	print("[net] regenerated iroh short room code: ", _host_room_code)
+	if not old_code.is_empty() and not old_revoke_token.is_empty() \
+			and old_code != _host_room_code:
+		_revoke_iroh_room_code(old_code, old_revoke_token)
 	return OK
 
 
@@ -146,28 +199,136 @@ func join_game(ip: String) -> Error:
 	multiplayer.multiplayer_peer = peer
 	active_transport = TRANSPORT_ENET
 	_host_room_code = ""
+	_host_room_revoke_token = ""
+	_host_iroh_endpoint_id = ""
 	_prepare_join_session()
 	return OK
 
 
 func join_iroh_game(room_code: String) -> Error:
 	stop_lan_discovery()
+	_last_iroh_error = ""
 	var normalized := IrohRoomCode.normalize(room_code)
 	if not IrohRoomCode.is_valid(normalized):
 		return ERR_INVALID_PARAMETER
 	if not is_iroh_available():
 		return ERR_UNAVAILABLE
+	var resolution := await _rendezvous_request(
+			"%s/%s" % [IROH_JOIN_CODES_PATH, normalized.uri_encode()])
+	if resolution["error"] != OK:
+		_last_iroh_error = str(resolution["message"])
+		return resolution["error"]
+	var endpoint_id := str(resolution["payload"].get("endpoint_id", "")).strip_edges()
+	if not _is_valid_iroh_endpoint_id(endpoint_id):
+		_last_iroh_error = "The discovery service returned an invalid endpoint ID."
+		return ERR_INVALID_DATA
 	var bridge = load(IROH_BRIDGE_PATH)
 	if bridge == null:
 		return ERR_CANT_OPEN
-	var peer: MultiplayerPeer = bridge.connect_client(normalized)
+	var peer: MultiplayerPeer = bridge.connect_client(endpoint_id)
 	if peer == null:
 		return FAILED
 	multiplayer.multiplayer_peer = peer
 	active_transport = TRANSPORT_IROH
 	_host_room_code = ""
+	_host_room_revoke_token = ""
+	_host_iroh_endpoint_id = ""
 	_prepare_join_session()
 	return OK
+
+
+func _is_valid_iroh_endpoint_id(endpoint_id: String) -> bool:
+	if endpoint_id.length() != IROH_ENDPOINT_ID_LENGTH:
+		return false
+	for index in endpoint_id.length():
+		var character := endpoint_id.unicode_at(index)
+		var is_ascii_letter := (
+				(character >= 65 and character <= 90)
+				or (character >= 97 and character <= 122)
+		)
+		var is_digit := character >= 48 and character <= 57
+		if not is_ascii_letter and not is_digit and character != 45 and character != 95:
+			return false
+	return true
+
+
+func _register_iroh_endpoint(endpoint_id: String) -> Dictionary:
+	var registration := await _rendezvous_request(
+			IROH_JOIN_CODES_PATH,
+			HTTPClient.METHOD_POST,
+			JSON.stringify({"endpoint_id": endpoint_id}),
+			PackedStringArray(["Content-Type: application/json"]))
+	if registration["error"] != OK:
+		return {
+			"error": registration["error"],
+			"message": registration["message"],
+			"code": "",
+			"revoke_token": "",
+		}
+	var payload: Dictionary = registration["payload"]
+	var short_code := IrohRoomCode.normalize(str(payload.get("code", "")))
+	var revoke_token := str(payload.get("revoke_token", "")).strip_edges()
+	if not IrohRoomCode.is_valid(short_code) or revoke_token.is_empty():
+		return {
+			"error": ERR_INVALID_DATA,
+			"message": "The discovery service returned an invalid room code.",
+			"code": "",
+			"revoke_token": "",
+		}
+	return {
+		"error": OK,
+		"message": "",
+		"code": short_code,
+		"revoke_token": revoke_token,
+	}
+
+
+func _rendezvous_request(path: String, method := HTTPClient.METHOD_GET,
+		body := "", headers := PackedStringArray()) -> Dictionary:
+	var request := HTTPRequest.new()
+	request.timeout = 10.0
+	add_child(request)
+	var start_error := request.request(
+			IROH_RENDEZVOUS_URL + path, headers, method, body)
+	if start_error != OK:
+		request.queue_free()
+		return {
+			"error": start_error,
+			"message": "Could not contact the discovery service.",
+			"payload": {},
+		}
+	var response: Array = await request.request_completed
+	request.queue_free()
+	var result := int(response[0])
+	var response_code := int(response[1])
+	var response_body := (response[3] as PackedByteArray).get_string_from_utf8()
+	var parsed = JSON.parse_string(response_body) if not response_body.is_empty() else null
+	var payload: Dictionary = parsed if parsed is Dictionary else {}
+	if result != HTTPRequest.RESULT_SUCCESS:
+		return {
+			"error": ERR_CANT_CONNECT,
+			"message": "Could not contact the discovery service.",
+			"payload": payload,
+		}
+	if response_code < 200 or response_code >= 300:
+		var api_error: Dictionary = payload.get("error", {}) if payload.get("error", {}) is Dictionary else {}
+		var message := str(api_error.get("message", "Discovery request failed.")).strip_edges()
+		return {
+			"error": ERR_DOES_NOT_EXIST if response_code == 404 else FAILED,
+			"message": message,
+			"payload": payload,
+		}
+	return {"error": OK, "message": "", "payload": payload}
+
+
+func _revoke_iroh_room_code(code: String, revoke_token: String) -> void:
+	var result := await _rendezvous_request(
+			"%s/%s" % [IROH_JOIN_CODES_PATH, code.uri_encode()],
+			HTTPClient.METHOD_DELETE,
+			"",
+			PackedStringArray(["Authorization: Bearer %s" % revoke_token]))
+	if result["error"] != OK and result["error"] != ERR_DOES_NOT_EXIST:
+		print("[net] could not revoke iroh room code: ", result["message"])
 
 
 func _prepare_join_session() -> void:
@@ -181,12 +342,16 @@ func _prepare_join_session() -> void:
 
 
 func leave() -> void:
+	var room_code_to_revoke := _host_room_code
+	var revoke_token := _host_room_revoke_token
 	_stop_lan_advertising()
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	active_transport = TRANSPORT_OFFLINE
 	_host_room_code = ""
+	_host_room_revoke_token = ""
+	_host_iroh_endpoint_id = ""
 	players.clear()
 	lobby_settings.clear()
 	round_player_ids.clear()
@@ -197,6 +362,8 @@ func leave() -> void:
 	_accepting_replay_ready = false
 	App.last_scores.clear()
 	App.last_winner = 0
+	if not room_code_to_revoke.is_empty() and not revoke_token.is_empty():
+		_revoke_iroh_room_code(room_code_to_revoke, revoke_token)
 
 
 func _process(delta: float) -> void:

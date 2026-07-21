@@ -3,6 +3,17 @@
 Read DESIGN.md first for the what/why. This file tracks exactly where the
 build is so a fresh session can pick up instantly.
 
+### 2026-07-21 addendum: short iroh rendezvous codes
+
+- Replaced exposed 43-character iroh endpoint IDs with four-character codes
+  issued by `iroh-rendezvous.maccam912.workers.dev`.
+- Hosts register before entering the lobby and revoke their mapping on leave;
+  guests resolve the code before passing the endpoint ID to godot-iroh.
+- Iroh hosts can generate and automatically copy a fresh code from the in-match
+  escape menu when the original mapping expires and someone wants to join late.
+- Added code normalization/validation, discovery-service error reporting, and
+  regression coverage that rejects raw endpoint IDs in the room-code field.
+
 ## Status: repaired LAN discovery + second iroh transport implemented (session 14, 2026-07-16)
 
 ### Session 14: retained UDP discovery and join-by-code (`NET-01`, `NET-02`)
@@ -13,7 +24,7 @@ build is so a fresh session can pick up instantly.
   deduplicate while preferring the routable LAN address.
 - Kept ENet as the default **Host on LAN** / manual-IP transport and added
   godot-iroh as a separately selected **Host by Code** / **Join Code** path.
-  Hosts can copy the endpoint code in the lobby; validation, CLI helpers,
+  Hosts can copy the room code in the lobby; validation, CLI helpers,
   transport-specific errors, and unsupported-platform fallback are included.
 - Vendored pinned MIT-licensed Windows x86_64, Linux x86_64, and universal
   macOS godot-iroh runtimes under Git LFS with source/checksum provenance.
@@ -353,9 +364,8 @@ eliminations, spectator mode, sounds, and HUD.
 4. Poses: lean/flatten-against-wall (the third P of the original game).
 5. Build out `map_empty.tscn` manually in the editor; it is already selectable
    from the host's lobby settings.
-6. Later: texture painting upgrade (analytic box UVs), friendly short-code
-   rendezvous on top of iroh endpoint codes, host migration, late-join
-   spectators.
+6. Later: texture painting upgrade (analytic box UVs), host migration, and
+   late-join spectators.
 
 ### Gotchas learned (respect these)
 - Autoload is `App`, not `Game` — a scene root named "Game" would collide

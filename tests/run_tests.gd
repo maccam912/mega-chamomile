@@ -1097,15 +1097,18 @@ func test_lan_ip_selection() -> void:
 
 func test_iroh_room_codes() -> void:
 	print("iroh room codes:")
-	var valid_code := "A".repeat(42) + "_"
-	check(IrohRoomCodeScript.is_valid(valid_code),
-			"a 32-byte base64url endpoint ID is accepted")
-	check(IrohRoomCodeScript.normalize("  %s\n" % valid_code) == valid_code,
-			"clipboard whitespace is removed")
-	check(not IrohRoomCodeScript.is_valid(valid_code + "A"),
+	check(IrohRoomCodeScript.is_valid("NS6J"),
+			"a four-character rendezvous code is accepted")
+	check(IrohRoomCodeScript.normalize("  ns6j\n") == "NS6J",
+			"clipboard whitespace and letter case are normalized")
+	check(not IrohRoomCodeScript.is_valid("NS6J5"),
 			"codes with the wrong length are rejected")
-	check(not IrohRoomCodeScript.is_valid("!" + valid_code.substr(1)),
-			"characters outside base64url are rejected")
+	check(not IrohRoomCodeScript.is_valid("ABI0"),
+			"ambiguous rendezvous characters are rejected")
+	check(not IrohRoomCodeScript.is_valid("ABLU"),
+			"the rendezvous alphabet excludes L and U")
+	check(not IrohRoomCodeScript.is_valid("A".repeat(42) + "_"),
+			"raw iroh endpoint IDs are no longer room codes")
 
 
 func test_iroh_unreliable_packet_budget() -> void:
